@@ -43,10 +43,11 @@ def test_migrations_apply_to_postgres() -> None:
                     text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
                 ).scalars()
             )
-        assert version == "0004"
+        assert version == "0005"
         assert "resumes" in table_names
         assert "resume_versions" in table_names
         assert "tailored_resumes" in table_names
+        assert "generated_resumes" in table_names
 
 
 @pytest.mark.skipif(shutil.which("docker") is None, reason="Docker unavailable")
@@ -357,6 +358,216 @@ def test_match_endpoint_end_to_end_on_postgres() -> None:
                 second = client.get(url_match, params={"resume_id": resume_id})
                 assert second.status_code == 200
                 assert second.json() == body
+        finally:
+            app.dependency_overrides.clear()
+
+
+@pytest.mark.skipif(shutil.which("docker") is None, reason="Docker unavailable")
+def test_generated_resume_persists_to_postgres() -> None:
+    """The synchronous GENERATE flow against real Postgres-backed services.
+
+    Submits a resume and a job description over HTTP (background ANALYZE),
+    matches, runs a TAILOR job, then generates the document synchronously and
+    asserts the GeneratedResume row is persisted pinned to the ResumeVersion.
+    """
+    import tempfile
+    from pathlib import Path
+
+    from fastapi.testclient import TestClient
+    from sqlalchemy.orm import Session, sessionmaker
+
+    from app.dependencies import (
+        get_analysis_service,
+        get_generation_service,
+        get_job_service,
+        get_matching_service,
+        get_tailoring_service,
+    )
+    from app.domain.generated import GeneratedResume
+    from app.llm.fixture import FixtureLLMProvider
+    from app.models import (
+        GeneratedResumeRow,
+        Job,
+        JobAnalysis,
+        JobDescription,
+        MatchResultRow,
+        ResumeVersionRow,
+        TailoredResumeRow,
+    )
+    from app.repositories import mappers
+    from app.repositories.resume import SqlAlchemyResumeRepository
+    from app.repositories.sqlalchemy import SqlAlchemyRepository
+    from app.services.analysis import AnalysisService
+    from app.services.generation import GenerationService
+    from app.services.jobs import JobService
+    from app.services.matching import MatchingService
+    from app.services.resume import ResumeService, get_resume_service
+    from app.services.tailoring import TailoringService
+    from app.storage.local import LocalStorageService
+
+    class FakeCompiler:
+        def compile(self, tex: str, work_dir: Path) -> Path:
+            pdf = work_dir / "main.pdf"
+            pdf.write_bytes(b"%PDF-1.4 fake generated output")
+            return pdf
+
+    resume_payload = {
+        "schema_version": 1,
+        "personal_information": {"full_name": "Ada Lovelace"},
+        "summary": "Backend engineer who builds API platforms.",
+        "skills": {"languages": ["Python"], "frameworks": ["FastAPI"]},
+        "experience": [
+            {
+                "company": "Acme",
+                "title": "Engineer",
+                "start_date": "2021-03",
+                "bullets": ["Built the ordering API with FastAPI"],
+            }
+        ],
+    }
+
+    with PostgresContainer("postgres:16-alpine") as postgres:
+        url = _psycopg_url(postgres)
+        command.upgrade(_alembic_config(url), "head")
+
+        engine = create_engine(url)
+        session = Session(engine)
+        session_factory = sessionmaker(bind=engine)
+
+        analysis_service = AnalysisService(
+            jd_repository=SqlAlchemyRepository(
+                session,
+                JobDescription,
+                mappers.job_description_to_row,
+                mappers.job_description_from_row,
+            ),
+            analysis_repository=SqlAlchemyRepository(
+                session,
+                JobAnalysis,
+                mappers.job_analysis_to_row,
+                mappers.job_analysis_from_row,
+            ),
+            llm_provider=FixtureLLMProvider(),
+        )
+        job_service = JobService(
+            SqlAlchemyRepository(session, Job, mappers.job_to_row, mappers.job_from_row)
+        )
+        matching_service = MatchingService(
+            analysis_repository=SqlAlchemyRepository(
+                session,
+                JobAnalysis,
+                mappers.job_analysis_to_row,
+                mappers.job_analysis_from_row,
+            ),
+            match_repository=SqlAlchemyRepository(
+                session,
+                MatchResultRow,
+                mappers.match_result_to_row,
+                mappers.match_result_from_row,
+            ),
+        )
+        resume_repo = SqlAlchemyResumeRepository(session_factory)
+        resume_service = ResumeService(resume_repo)
+        tailored_repo = SqlAlchemyRepository(
+            session,
+            TailoredResumeRow,
+            mappers.tailored_resume_to_row,
+            mappers.tailored_resume_from_row,
+        )
+        tailoring_service = TailoringService(
+            version_repository=SqlAlchemyRepository(
+                session,
+                ResumeVersionRow,
+                mappers.resume_version_to_row,
+                mappers.resume_version_from_row,
+            ),
+            tailored_repository=tailored_repo,
+            resume_repository=resume_repo,
+            analysis_repository=SqlAlchemyRepository(
+                session,
+                JobAnalysis,
+                mappers.job_analysis_to_row,
+                mappers.job_analysis_from_row,
+            ),
+            match_repository=SqlAlchemyRepository(
+                session,
+                MatchResultRow,
+                mappers.match_result_to_row,
+                mappers.match_result_from_row,
+            ),
+            llm_provider=FixtureLLMProvider(),
+        )
+        generation_service = GenerationService(
+            tailored_repository=tailored_repo,
+            generated_repository=SqlAlchemyRepository(
+                session,
+                GeneratedResumeRow,
+                mappers.generated_resume_to_row,
+                mappers.generated_resume_from_row,
+            ),
+            storage=LocalStorageService(Path(tempfile.mkdtemp(prefix="ats-gen-"))),
+            compiler=FakeCompiler(),
+        )
+
+        app.dependency_overrides[get_job_service] = lambda: job_service
+        app.dependency_overrides[get_analysis_service] = lambda: analysis_service
+        app.dependency_overrides[get_matching_service] = lambda: matching_service
+        app.dependency_overrides[get_resume_service] = lambda: resume_service
+        app.dependency_overrides[get_tailoring_service] = lambda: tailoring_service
+        app.dependency_overrides[get_generation_service] = lambda: generation_service
+
+        try:
+            with TestClient(app) as client:
+                resume_resp = client.post("/api/resumes", json=resume_payload)
+                assert resume_resp.status_code == 201
+                resume_id = resume_resp.json()["id"]
+
+                submitted = client.post(
+                    "/api/job-descriptions",
+                    json={"jd_text": "Role: Engineer\n- Must have FastAPI\n"},
+                )
+                assert submitted.status_code == 201
+                job_description_id = submitted.json()["job_description_id"]
+
+                client.get(
+                    f"/api/job-descriptions/{job_description_id}/match",
+                    params={"resume_id": resume_id},
+                )
+                tailor_resp = client.post(
+                    f"/api/resumes/{resume_id}/tailor",
+                    json={"job_description_id": job_description_id},
+                )
+                assert tailor_resp.status_code == 201
+                tailor_job = client.get(f"/api/jobs/{tailor_resp.json()['job_id']}")
+                assert tailor_job.json()["status"] == "SUCCEEDED"
+
+                generate_resp = client.post(
+                    f"/api/job-descriptions/{job_description_id}/generated"
+                )
+                assert generate_resp.status_code == 201
+                body = generate_resp.json()
+                assert body["latex_key"] == f"latex/{job_description_id}.tex"
+                assert body["pdf_key"] == f"pdf/{job_description_id}.pdf"
+
+                pdf = client.get(
+                    f"/api/job-descriptions/{job_description_id}/generated/pdf"
+                )
+                assert pdf.status_code == 200
+                assert pdf.content.startswith(b"%PDF")
+                latex = client.get(
+                    f"/api/job-descriptions/{job_description_id}/generated/latex"
+                )
+                assert latex.status_code == 200
+                assert latex.content.startswith(b"\\documentclass")
+
+                generated_row = session.get(
+                    GeneratedResumeRow, job_description_id
+                )
+                assert generated_row is not None
+                assert generated_row.resume_version_id == body["resume_version_id"]
+                assert generated_row.resume_id == resume_id
+                stored = GeneratedResume.model_validate(generated_row.data)
+                assert stored.job_description_id == job_description_id
         finally:
             app.dependency_overrides.clear()
 
