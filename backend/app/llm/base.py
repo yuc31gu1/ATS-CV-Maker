@@ -5,6 +5,9 @@ from pydantic import BaseModel
 JD_START_MARKER = "<JobDescription>"
 JD_END_MARKER = "</JobDescription>"
 
+TAILOR_SCOPE_START_MARKER = "<TailorScope>"
+TAILOR_SCOPE_END_MARKER = "</TailorScope>"
+
 
 @runtime_checkable
 class LLMProvider(Protocol):

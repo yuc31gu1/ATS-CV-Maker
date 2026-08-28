@@ -9,6 +9,9 @@ from app import models
 from app.domain.analysis import JobAnalysis, JobDescription
 from app.domain.jobs import Job
 from app.domain.matching import EvidenceMatch, MatchResult
+from app.domain.resume import Resume
+from app.domain.tailoring import TailoredResume
+from app.domain.versioning import ResumeVersion
 
 
 def job_description_to_row(entity: JobDescription) -> models.JobDescription:
@@ -100,3 +103,36 @@ def match_result_from_row(row: models.MatchResultRow) -> MatchResult:
         matches=[EvidenceMatch.model_validate(m) for m in row.matches],
         created_at=row.created_at,
     )
+
+
+def resume_version_to_row(entity: ResumeVersion) -> models.ResumeVersionRow:
+    return models.ResumeVersionRow(
+        id=entity.id,
+        resume_id=entity.resume_id,
+        data=entity.data.model_dump(exclude={"id"}, mode="json"),
+        created_at=entity.created_at,
+    )
+
+
+def resume_version_from_row(row: models.ResumeVersionRow) -> ResumeVersion:
+    return ResumeVersion(
+        id=row.id,
+        resume_id=row.resume_id,
+        data=Resume.model_validate({**row.data, "id": row.resume_id}),
+        created_at=row.created_at,
+    )
+
+
+def tailored_resume_to_row(entity: TailoredResume) -> models.TailoredResumeRow:
+    return models.TailoredResumeRow(
+        id=entity.job_description_id,
+        job_description_id=entity.job_description_id,
+        resume_version_id=entity.resume_version_id,
+        resume_id=entity.resume_id,
+        data=entity.model_dump(mode="json"),
+        created_at=entity.created_at,
+    )
+
+
+def tailored_resume_from_row(row: models.TailoredResumeRow) -> TailoredResume:
+    return TailoredResume.model_validate(row.data)

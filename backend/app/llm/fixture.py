@@ -1,15 +1,23 @@
+import json
 import re
 from collections.abc import Sequence
 
 from pydantic import BaseModel
 
+from app import catalog
 from app.domain.analysis import (
     Importance,
     JobRequirement,
     LLMJobAnalysis,
     RequirementCategory,
 )
-from app.llm.base import JD_END_MARKER, JD_START_MARKER
+from app.domain.tailoring import LLMTailoredOutput, RewrittenBullet
+from app.llm.base import (
+    JD_END_MARKER,
+    JD_START_MARKER,
+    TAILOR_SCOPE_END_MARKER,
+    TAILOR_SCOPE_START_MARKER,
+)
 
 _SENIORITY_RE = re.compile(r"(\d+\+?\s*years?|years? of experience|experience level)")
 
@@ -62,6 +70,8 @@ class FixtureLLMProvider:
             if not self._responses:
                 raise AssertionError("FixtureLLMProvider exhausted its scripted responses")
             return self._responses.pop(0)
+        if output_schema is LLMTailoredOutput:
+            return self.tailor(self._scope_from_prompt(prompt))
         return self.analyze_jd(self._jd_from_prompt(prompt))
 
     @staticmethod
@@ -71,6 +81,87 @@ class FixtureLLMProvider:
         if start == -1 or end == -1 or end <= start:
             return ""
         return prompt[start + len(JD_START_MARKER) : end].strip()
+
+    @staticmethod
+    def _scope_from_prompt(prompt: str) -> dict:
+        start = prompt.find(TAILOR_SCOPE_START_MARKER)
+        end = prompt.find(TAILOR_SCOPE_END_MARKER)
+        if start == -1 or end == -1 or end <= start:
+            return {"summary": "", "bullets": [], "projects": [], "skills": {}}
+        raw = prompt[start + len(TAILOR_SCOPE_START_MARKER) : end].strip()
+        return json.loads(raw)
+
+    def tailor(self, scope: dict) -> LLMTailoredOutput:
+        """Deterministic rewrite that never invents claims.
+
+        Aligns wording with the Job Description's terminology only when the
+        source already carries the same canonical skill (e.g. bullet says
+        ``Postgres``, requirement says ``PostgreSQL``), so every claim stays
+        traceable to source evidence.
+        """
+        requirements = [
+            requirement
+            for bullet in scope.get("bullets", [])
+            for requirement in bullet.get("matched_requirements", [])
+        ]
+        bullets = [
+            RewrittenBullet(
+                evidence_id=bullet["evidence_id"],
+                text=self._job_target_rewrite(
+                    bullet["original"], bullet.get("matched_requirements", [])
+                ),
+                reason="Retained evidence-bound wording; aligned terminology "
+                "with the Job Description where supported.",
+                source_evidence_ids=[bullet["evidence_id"]],
+            )
+            for bullet in scope.get("bullets", [])
+        ]
+        summary = scope.get("summary")
+        return LLMTailoredOutput(
+            summary=(
+                self._job_target_rewrite(summary, requirements) if summary else None
+            ),
+            summary_reason="Retained the summary and aligned terminology with "
+            "the Job Description where supported.",
+            summary_source_evidence_ids=[
+                bullet["evidence_id"] for bullet in scope.get("bullets", [])
+            ],
+            bullets=bullets,
+        )
+
+    @staticmethod
+    def _job_target_rewrite(text: str, requirements: Sequence[str]) -> str:
+        """Replace a bullet's synonym with the JD's term for the same canonical."""
+        rewritten = text
+        for requirement in requirements:
+            for canonical, term in FixtureLLMProvider._requirement_terms(requirement):
+                for surface in catalog.synonyms_of(canonical):
+                    if surface == term or len(surface) < 3:
+                        continue
+                    rewritten = re.sub(
+                        rf"\b{re.escape(surface)}\b",
+                        term,
+                        rewritten,
+                        flags=re.IGNORECASE,
+                    )
+        return rewritten
+
+    @staticmethod
+    def _requirement_terms(requirement: str) -> list[tuple[str, str]]:
+        """(canonical, surface term) pairs present in a requirement text.
+
+        The surface term keeps the requirement's own casing (e.g. "PostgreSQL"),
+        so aligned rewrites read naturally.
+        """
+        terms: list[tuple[str, str]] = []
+        for skill in catalog.SKILLS:
+            for name in (skill.canonical, *skill.aliases):
+                if len(name) < 3:
+                    continue
+                match = re.search(rf"\b{re.escape(name)}\b", requirement, re.IGNORECASE)
+                if match is not None:
+                    terms.append((skill.canonical, match.group(0)))
+        return terms
 
     def analyze_jd(self, jd_text: str) -> LLMJobAnalysis:
         lines = [line.strip() for line in jd_text.splitlines() if line.strip()]
