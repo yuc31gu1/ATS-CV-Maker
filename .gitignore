@@ -1,6 +1,4 @@
-# AI development docs (not committed)
-AGENTS.md
-docs/agents/
+# Local ticket/spec scratch copies (GitHub issues are canonical)
 .scratch/
 
 # Credentials — never commit secrets or keys
