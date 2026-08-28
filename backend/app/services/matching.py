@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from app import catalog
@@ -13,6 +14,16 @@ _STATUS_RANK = {
     MatchStatus.PARTIAL_MATCH: 2,
     MatchStatus.STRONG_MATCH: 3,
 }
+
+
+@dataclass(frozen=True)
+class _Candidate:
+    """One skill-level match verdict for a requirement, before aggregation."""
+
+    status: MatchStatus
+    found_skill: str
+    matched_skill: str
+    evidence: list[tuple[str, str]]
 
 
 def utcnow() -> datetime:
@@ -130,38 +141,40 @@ class MatchingService:
                 rationale="No catalog skill found in the requirement.",
             )
 
-        candidates = []
-        for skill in found:
-            if skill in canonical_skills:
-                evidence = substantiated.get(skill, [])
-                if evidence:
-                    candidates.append((MatchStatus.STRONG_MATCH, skill, skill, evidence))
-                else:
-                    candidates.append((MatchStatus.PARTIAL_MATCH, skill, skill, []))
-            else:
-                adjacent = sorted(catalog.related_to(skill) & canonical_skills)
-                if adjacent:
-                    candidates.append((MatchStatus.TRANSFERABLE, skill, adjacent[0], []))
-                else:
-                    candidates.append((MatchStatus.NO_EVIDENCE, skill, skill, []))
-
-        status, _found, matched_skill, evidence = max(
-            candidates, key=lambda c: _STATUS_RANK[c[0]]
-        )
-        ambiguous = status is MatchStatus.TRANSFERABLE or len(
-            {c[1] for c in candidates if _STATUS_RANK[c[0]] > 0}
+        candidates = [
+            self._candidate_for(skill, canonical_skills, substantiated) for skill in found
+        ]
+        best = max(candidates, key=lambda candidate: _STATUS_RANK[candidate.status])
+        ambiguous = best.status is MatchStatus.TRANSFERABLE or len(
+            {candidate.found_skill for candidate in candidates if _STATUS_RANK[candidate.status] > 0}
         ) > 1
         return EvidenceMatch(
             requirement=requirement.requirement,
             category=requirement.category,
             importance=requirement.importance,
-            status=status,
-            matched_skill=matched_skill,
+            status=best.status,
+            matched_skill=best.matched_skill,
             ambiguous=ambiguous,
-            rationale=self._rationale(status, matched_skill),
-            evidence_ids=[item[0] for item in evidence],
-            evidence=list(dict.fromkeys(item[1] for item in evidence)),
+            rationale=self._rationale(best.status, best.matched_skill),
+            evidence_ids=[item[0] for item in best.evidence],
+            evidence=list(dict.fromkeys(item[1] for item in best.evidence)),
         )
+
+    @staticmethod
+    def _candidate_for(
+        skill: str,
+        canonical_skills: set[str],
+        substantiated: dict[str, list[tuple[str, str]]],
+    ) -> _Candidate:
+        if skill in canonical_skills:
+            evidence = substantiated.get(skill, [])
+            if evidence:
+                return _Candidate(MatchStatus.STRONG_MATCH, skill, skill, evidence)
+            return _Candidate(MatchStatus.PARTIAL_MATCH, skill, skill, [])
+        adjacent = sorted(catalog.related_to(skill) & canonical_skills)
+        if adjacent:
+            return _Candidate(MatchStatus.TRANSFERABLE, skill, adjacent[0], [])
+        return _Candidate(MatchStatus.NO_EVIDENCE, skill, skill, [])
 
     @staticmethod
     def _rationale(status: MatchStatus, matched_skill: str | None) -> str:
