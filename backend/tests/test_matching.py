@@ -316,3 +316,55 @@ def test_match_for_job_raises_not_found_without_analysis():
     service = make_service()
     with pytest.raises(NotFoundError):
         service.match_for_job("missing", resume())
+
+
+def test_match_for_job_refetches_persisted_result_without_recompute():
+    service = make_service()
+    candidate = resume(
+        skills={"frameworks": ["FastAPI"]},
+        experience=[
+            Experience(
+                company="Acme",
+                title="Engineer",
+                start_date="2021-03",
+                bullets=["Built the ordering API with FastAPI"],
+            )
+        ],
+    )
+    service._analyses.add("jd-1", analysis(requirement("Experience with FastAPI")))
+
+    first = service.match_for_job("jd-1", candidate)
+
+    # a later analysis change must not leak into the persisted result on re-fetch
+    service._analyses.add("jd-1", analysis(requirement("Experience with Django")))
+    second = service.match_for_job("jd-1", candidate)
+
+    assert second == first
+    assert second.matches[0].status == MatchStatus.STRONG_MATCH
+
+
+def test_match_for_job_recomputes_when_resume_differs():
+    service = make_service()
+    candidate = resume(
+        skills={"frameworks": ["FastAPI"]},
+        experience=[
+            Experience(
+                company="Acme",
+                title="Engineer",
+                start_date="2021-03",
+                bullets=["Built the ordering API with FastAPI"],
+            )
+        ],
+    )
+    service._analyses.add("jd-1", analysis(requirement("Experience with FastAPI")))
+
+    service.match_for_job("jd-1", candidate)
+    other = Resume(
+        id="resume-2",
+        personal_information=PersonalInformation(full_name="Ada Lovelace"),
+        skills={"frameworks": ["Django"]},
+    )
+    recomputed = service.match_for_job("jd-1", other)
+
+    assert recomputed.resume_id == "resume-2"
+    assert recomputed.matches[0].status == MatchStatus.TRANSFERABLE

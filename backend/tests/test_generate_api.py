@@ -188,6 +188,56 @@ def test_generate_document_end_to_end(api_client: TestClient):
     assert fetched.json() == body
 
 
+def test_full_acceptance_flow_with_fixture_provider(api_client: TestClient):
+    """Criterion 6: create master -> analyze -> match -> tailor -> latex -> pdf
+    -> validate passes end-to-end with the fixture LLM provider."""
+    resume_resp = api_client.post("/api/resumes", json=resume_payload())
+    assert resume_resp.status_code == 201
+    resume_id = resume_resp.json()["id"]
+
+    submitted = api_client.post("/api/job-descriptions", json={"jd_text": SAMPLE_JD})
+    assert submitted.status_code == 201
+    job_description_id = submitted.json()["job_description_id"]
+
+    analysis = api_client.get(
+        f"/api/job-descriptions/{job_description_id}/analysis"
+    ).json()
+    assert analysis["requirements"]
+
+    match = api_client.get(
+        f"/api/job-descriptions/{job_description_id}/match",
+        params={"resume_id": resume_id},
+    ).json()
+    assert match["matches"]
+
+    tailor = api_client.post(
+        f"/api/resumes/{resume_id}/tailor",
+        json={"job_description_id": job_description_id},
+    )
+    assert tailor.status_code == 201
+    tailor_job = api_client.get(f"/api/jobs/{tailor.json()['job_id']}")
+    assert tailor_job.json()["status"] == "SUCCEEDED"
+
+    generated = api_client.post(
+        f"/api/job-descriptions/{job_description_id}/generated"
+    )
+    assert generated.status_code == 201
+    body = generated.json()
+    assert body["resume_version_id"]
+
+    pdf = api_client.get(
+        f"/api/job-descriptions/{job_description_id}/generated/pdf"
+    )
+    assert pdf.status_code == 200
+    assert pdf.content.startswith(b"%PDF")
+
+    analysis_out = api_client.get(
+        f"/api/job-descriptions/{job_description_id}/generated/analysis"
+    )
+    assert analysis_out.status_code == 200
+    assert analysis_out.json()["pdf_text_extraction"] is True
+
+
 def test_generated_pdf_is_downloadable(api_client: TestClient):
     job_description_id = seed_tailored_job(api_client)
     api_client.post(f"/api/job-descriptions/{job_description_id}/generated")

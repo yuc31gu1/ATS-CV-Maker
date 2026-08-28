@@ -156,3 +156,33 @@ def test_get_missing_job_returns_not_found(api_client):
     resp = api_client.get("/api/jobs/missing")
     assert resp.status_code == 404
     assert resp.json()["error"]["code"] == "NOT_FOUND"
+
+
+def test_list_jobs_filters_by_type_and_job_description_id(api_client):
+    first = submit_job(api_client)
+    second = submit_job(api_client)
+
+    all_jobs = api_client.get("/api/jobs")
+    assert all_jobs.status_code == 200
+    assert {job["id"] for job in all_jobs.json()} == {first["job_id"], second["job_id"]}
+
+    analyzed = api_client.get("/api/jobs", params={"type": "ANALYZE"})
+    assert {job["id"] for job in analyzed.json()} == {
+        first["job_id"],
+        second["job_id"],
+    }
+
+    for_jd = api_client.get(
+        "/api/jobs",
+        params={"type": "ANALYZE", "job_description_id": first["job_description_id"]},
+    )
+    assert [job["id"] for job in for_jd.json()] == [first["job_id"]]
+
+
+def test_list_jobs_is_newest_first(api_client):
+    submit_job(api_client, "Role: Engineer A\n- Must have Python\n")
+    submit_job(api_client, "Role: Engineer B\n- Must have Python\n")
+
+    jobs = api_client.get("/api/jobs", params={"type": "ANALYZE"}).json()
+    assert jobs[0]["result"]["role"] == "Engineer B"
+    assert jobs[1]["result"]["role"] == "Engineer A"
