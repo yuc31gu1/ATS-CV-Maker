@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { fetchMatch, type EvidenceMatch, type MatchResult, type MatchStatus } from "../api/match";
 import { listResumes } from "../api/resume";
 
@@ -176,6 +176,12 @@ export function MatchPage() {
               Ambiguous and transferable hits are surfaced for your review and are never presented
               as direct experience.
             </p>
+            <Link
+              to={`/create/review?jd=${phase.result.job_description_id}`}
+              className="mt-4 inline-block rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
+            >
+              Tailor & review →
+            </Link>
           </div>
         )}
       </div>
