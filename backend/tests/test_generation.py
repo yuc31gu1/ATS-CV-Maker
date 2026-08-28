@@ -118,12 +118,14 @@ def test_generate_is_deterministic_across_runs(service):
     svc, tailored_repo, storage = service
     tailored_repo.add("jd-1", _tailored())
     first = svc.generate("jd-1")
+    first_tex = storage.load("latex/jd-1.tex")
+    first_pdf = storage.load("pdf/jd-1.pdf")
     second = svc.generate("jd-1")
-    assert first.resume_version_id == second.resume_version_id
-    assert first.latex_key == second.latex_key
-    assert first.pdf_key == second.pdf_key
-    assert storage.load("latex/jd-1.tex") == storage.load("latex/jd-1.tex")
-    assert storage.load("pdf/jd-1.pdf") == storage.load("pdf/jd-1.pdf")
+    assert second.resume_version_id == first.resume_version_id
+    assert second.latex_key == first.latex_key
+    assert second.pdf_key == first.pdf_key
+    assert storage.load("latex/jd-1.tex") == first_tex
+    assert storage.load("pdf/jd-1.pdf") == first_pdf
 
 
 def test_pdf_and_latex_bytes_are_downloadable(service):

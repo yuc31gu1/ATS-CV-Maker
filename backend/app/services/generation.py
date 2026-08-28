@@ -50,9 +50,8 @@ class GenerationService:
             )
         tex = self._renderer.render(tailored)
         pdf_bytes = self._compile(tex)
-        key = job_description_id
-        latex_key = f"latex/{key}.tex"
-        pdf_key = f"pdf/{key}.pdf"
+        latex_key = f"latex/{job_description_id}.tex"
+        pdf_key = f"pdf/{job_description_id}.pdf"
         self._storage.save(latex_key, tex.encode("utf-8"))
         self._storage.save(pdf_key, pdf_bytes)
         generated = GeneratedResume(

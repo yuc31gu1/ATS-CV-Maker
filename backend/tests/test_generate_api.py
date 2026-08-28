@@ -161,7 +161,7 @@ def test_generated_pdf_is_downloadable(api_client: TestClient):
     assert pdf.status_code == 200
     assert pdf.headers["content-type"] == "application/pdf"
     assert pdf.content.startswith(b"%PDF")
-    assert 'attachment; filename=' in pdf.headers["content-disposition"]
+    assert "attachment; filename=" in pdf.headers["content-disposition"]
 
 
 def test_generated_latex_is_downloadable(api_client: TestClient):
@@ -172,7 +172,7 @@ def test_generated_latex_is_downloadable(api_client: TestClient):
     assert latex.status_code == 200
     assert latex.headers["content-type"] == "application/x-tex"
     assert latex.content.startswith(b"\\documentclass")
-    assert 'attachment; filename=' in latex.headers["content-disposition"]
+    assert "attachment; filename=" in latex.headers["content-disposition"]
 
 
 def test_generated_resume_pins_to_resume_version(api_client: TestClient):

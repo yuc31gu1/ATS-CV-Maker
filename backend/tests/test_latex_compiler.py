@@ -24,6 +24,7 @@ def work_dir(tmp_path: Path) -> Path:
     work_dir.mkdir()
     return work_dir
 
+
 @pytest.fixture
 def compiler() -> LatexCompiler:
     return LatexCompiler(timeout=60.0)

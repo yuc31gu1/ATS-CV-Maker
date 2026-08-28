@@ -5,7 +5,14 @@ bullets, and hyperlinks. Content is escaped through LatexEscapeService; the
 LLM never influences structure.
 """
 
-from app.domain.resume import Education, Experience, MonthYear, Project
+from app.domain.resume import (
+    Certification,
+    Education,
+    Experience,
+    MonthYear,
+    PersonalInformation,
+    Project,
+)
 from app.domain.tailoring import TailoredResume
 from app.latex.escape import LatexEscapeService
 
@@ -81,7 +88,7 @@ class LatexRenderingService:
         lines.append(r"\end{center}")
         return "\n".join(lines)
 
-    def _contact(self, info) -> str:
+    def _contact(self, info: PersonalInformation) -> str:
         items = []
         if info.email:
             items.append(self._escape.escape(info.email))
@@ -96,11 +103,19 @@ class LatexRenderingService:
     def _section(self, title: str, body: str) -> str:
         return f"\\section*{{{title}}}\n{body}"
 
+    @staticmethod
+    def _bold(text: str) -> str:
+        return rf"\textbf{{{text}}}"
+
+    @staticmethod
+    def _italic(text: str) -> str:
+        return rf"\textit{{{text}}}"
+
     def _skills(self, skills: dict[str, list[str]]) -> str:
         lines = []
         for category, names in skills.items():
             names_text = ", ".join(self._escape.escape(name) for name in names)
-            lines.append(r"\textbf{" + self._escape.escape(category) + "} " + names_text)
+            lines.append(self._bold(self._escape.escape(category)) + " " + names_text)
         return "\\\\\n".join(lines)
 
     def _experience(self, experience: list[Experience]) -> str:
@@ -108,12 +123,12 @@ class LatexRenderingService:
 
     def _experience_block(self, exp: Experience) -> str:
         lines = []
-        title_line = r"\textbf{" + self._escape.escape(exp.title) + "}"
+        title_line = self._bold(self._escape.escape(exp.title))
         title_line += r"\hfill " + self._date_range(exp.start_date, exp.end_date)
         lines.append(title_line)
         employer = ", ".join(part for part in (exp.company, exp.location) if part)
         if employer:
-            lines.append(r"\textit{" + self._escape.escape(employer) + "}")
+            lines.append(self._italic(self._escape.escape(employer)))
         if exp.summary:
             lines.append(self._escape.escape(exp.summary))
         if exp.bullets:
@@ -125,7 +140,7 @@ class LatexRenderingService:
 
     def _project_block(self, proj: Project) -> str:
         lines = []
-        name_line = r"\textbf{" + self._escape.escape(proj.name) + "}"
+        name_line = self._bold(self._escape.escape(proj.name))
         if proj.url:
             name_line += r"\hfill " + self._href(proj.url, proj.url)
         lines.append(name_line)
@@ -144,26 +159,26 @@ class LatexRenderingService:
             label = ", ".join(part for part in (edu.degree, edu.field) if part)
         else:
             label = edu.school
-        line = r"\textbf{" + self._escape.escape(label) + "}"
+        line = self._bold(self._escape.escape(label))
         line += r"\hfill " + self._date_range(edu.start_date, edu.end_date)
         lines.append(line)
         if edu.degree or edu.field:
             school = ", ".join(part for part in (edu.school, edu.location) if part)
             if school:
-                lines.append(r"\textit{" + self._escape.escape(school) + "}")
+                lines.append(self._italic(self._escape.escape(school)))
         return "\n".join(lines)
 
-    def _certifications(self, certifications) -> str:
+    def _certifications(self, certifications: list[Certification]) -> str:
         blocks = []
         for cert in certifications:
             lines = []
-            line = r"\textbf{" + self._escape.escape(cert.name) + "}"
+            line = self._bold(self._escape.escape(cert.name))
             line += r"\hfill " + cert.date.render()
             lines.append(line)
             right = self._escape.escape(cert.issuer) if cert.issuer else ""
             if cert.url:
                 right += r"\hfill " + self._href(cert.url, cert.url)
-            lines.append(r"\textit{" + right + "}")
+            lines.append(self._italic(right))
             blocks.append("\n".join(lines))
         return "\n\n".join(blocks)
 
