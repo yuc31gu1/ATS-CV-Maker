@@ -104,6 +104,7 @@ def test_job_description_analysis_and_job_persist() -> None:
 
     from app.llm.fixture import FixtureLLMProvider
     from app.models import Job, JobAnalysis, JobDescription
+    from app.repositories import mappers
     from app.repositories.sqlalchemy import SqlAlchemyRepository
     from app.services.analysis import AnalysisService
     from app.services.jobs import JobService
@@ -115,11 +116,23 @@ def test_job_description_analysis_and_job_persist() -> None:
         engine = create_engine(url)
         session = Session(engine)
         jd_service = AnalysisService(
-            jd_repository=SqlAlchemyRepository(session, JobDescription),
-            analysis_repository=SqlAlchemyRepository(session, JobAnalysis),
+            jd_repository=SqlAlchemyRepository(
+                session,
+                JobDescription,
+                mappers.job_description_to_row,
+                mappers.job_description_from_row,
+            ),
+            analysis_repository=SqlAlchemyRepository(
+                session,
+                JobAnalysis,
+                mappers.job_analysis_to_row,
+                mappers.job_analysis_from_row,
+            ),
             llm_provider=FixtureLLMProvider(),
         )
-        job_service = JobService(SqlAlchemyRepository(session, Job))
+        job_service = JobService(
+            SqlAlchemyRepository(session, Job, mappers.job_to_row, mappers.job_from_row)
+        )
 
         job_description = jd_service.create_job_description(
             company="Acme", role=None, location=None, jd_text="Role: Engineer\n- Must have Python\n"
@@ -148,6 +161,7 @@ def test_match_result_persists_to_postgres() -> None:
     from app.domain.resume import Experience, PersonalInformation, Resume
     from app.llm.fixture import FixtureLLMProvider
     from app.models import JobAnalysis, JobDescription, MatchResultRow
+    from app.repositories import mappers
     from app.repositories.resume import SqlAlchemyResumeRepository
     from app.repositories.sqlalchemy import SqlAlchemyRepository
     from app.services.analysis import AnalysisService
@@ -162,8 +176,18 @@ def test_match_result_persists_to_postgres() -> None:
         session = Session(engine)
 
         jd_service = AnalysisService(
-            jd_repository=SqlAlchemyRepository(session, JobDescription),
-            analysis_repository=SqlAlchemyRepository(session, JobAnalysis),
+            jd_repository=SqlAlchemyRepository(
+                session,
+                JobDescription,
+                mappers.job_description_to_row,
+                mappers.job_description_from_row,
+            ),
+            analysis_repository=SqlAlchemyRepository(
+                session,
+                JobAnalysis,
+                mappers.job_analysis_to_row,
+                mappers.job_analysis_from_row,
+            ),
             llm_provider=FixtureLLMProvider(),
         )
         job_description = jd_service.create_job_description(
@@ -191,8 +215,18 @@ def test_match_result_persists_to_postgres() -> None:
         )
 
         matching = MatchingService(
-            analysis_repository=SqlAlchemyRepository(session, JobAnalysis),
-            match_repository=SqlAlchemyRepository(session, MatchResultRow),
+            analysis_repository=SqlAlchemyRepository(
+                session,
+                JobAnalysis,
+                mappers.job_analysis_to_row,
+                mappers.job_analysis_from_row,
+            ),
+            match_repository=SqlAlchemyRepository(
+                session,
+                MatchResultRow,
+                mappers.match_result_to_row,
+                mappers.match_result_from_row,
+            ),
         )
         matching.match_for_job(job_description.id, resume)
 
