@@ -1,0 +1,51 @@
+from datetime import UTC, datetime
+
+from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.db import Base
+
+
+def utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
+class JobDescription(Base):
+    __tablename__ = "job_descriptions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    company: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    role: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    location: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    jd_text: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class JobAnalysis(Base):
+    __tablename__ = "job_analyses"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    job_description_id: Mapped[str] = mapped_column(
+        ForeignKey("job_descriptions.id"), unique=True, index=True
+    )
+    role: Mapped[str] = mapped_column(String(255), nullable=False)
+    seniority: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    requirements: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Job(Base):
+    __tablename__ = "jobs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    type: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING", index=True)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    result: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
