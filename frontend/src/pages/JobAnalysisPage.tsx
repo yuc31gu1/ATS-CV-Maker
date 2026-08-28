@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import {
   fetchJob,
   fetchJobAnalysis,
@@ -187,10 +188,22 @@ export function JobAnalysisPage() {
         {phase.name === "done" && (
           <div className="mt-6 space-y-4">
             <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h2 className="text-lg font-semibold text-slate-900">{phase.analysis.role}</h2>
-              {phase.analysis.seniority && (
-                <p className="mt-1 text-sm text-slate-500">Seniority: {phase.analysis.seniority}</p>
-              )}
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">{phase.analysis.role}</h2>
+                  {phase.analysis.seniority && (
+                    <p className="mt-1 text-sm text-slate-500">
+                      Seniority: {phase.analysis.seniority}
+                    </p>
+                  )}
+                </div>
+                <Link
+                  to={`/create/match?jd=${phase.analysis.job_description_id}`}
+                  className="shrink-0 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
+                >
+                  Match against evidence →
+                </Link>
+              </div>
             </div>
             <RequirementList title="Required skills" requirements={requirementsOf("REQUIRED")} />
             <RequirementList title="Preferred skills" requirements={requirementsOf("PREFERRED")} />

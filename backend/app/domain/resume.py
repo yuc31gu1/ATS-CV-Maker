@@ -62,7 +62,7 @@ class MonthYear(str):
 class PersonalInformation(BaseModel):
     full_name: str = Field(min_length=1)
     headline: str = ""
-    email: str = Field(default="", pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    email: str = Field(default="", pattern=r"^$|^[^@\s]+@[^@\s]+\.[^@\s]+$")
     phone: str = ""
     location: str = ""
     website: str = ""

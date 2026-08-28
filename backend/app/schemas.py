@@ -3,7 +3,8 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
-from app.domain.analysis import JobRequirement
+from app.domain.analysis import Importance, JobRequirement, RequirementCategory
+from app.domain.matching import MatchStatus
 
 
 class DatabaseStatus(str, Enum):
@@ -68,3 +69,22 @@ class JobAnalysisOut(BaseModel):
     role: str
     seniority: str | None = None
     requirements: list[JobRequirement] = Field(default_factory=list)
+
+
+class EvidenceMatchOut(BaseModel):
+    requirement: str
+    category: RequirementCategory
+    importance: Importance
+    status: MatchStatus
+    matched_skill: str | None = None
+    ambiguous: bool = False
+    rationale: str = ""
+    evidence_ids: list[str] = Field(default_factory=list)
+    evidence: list[str] = Field(default_factory=list)
+
+
+class MatchOut(BaseModel):
+    job_description_id: str
+    resume_id: str
+    matches: list[EvidenceMatchOut] = Field(default_factory=list)
+    created_at: datetime

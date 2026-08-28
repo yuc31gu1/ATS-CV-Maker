@@ -1,6 +1,5 @@
 import json
 import re
-from datetime import UTC, datetime
 from uuid import uuid4
 
 from pydantic import BaseModel, ValidationError
@@ -9,13 +8,10 @@ from app.domain.analysis import JobAnalysis, JobDescription, LLMJobAnalysis
 from app.errors import LLMValidationFailed, NotFoundError, ResourceValidationError
 from app.llm.base import JD_END_MARKER, JD_START_MARKER, LLMProvider
 from app.repositories.base import EntityRepository
+from app.time import utcnow
 
 MAX_JD_LENGTH = 50_000
 MAX_RETRIES = 1
-
-
-def utcnow() -> datetime:
-    return datetime.now(UTC)
 
 
 class AnalysisService:

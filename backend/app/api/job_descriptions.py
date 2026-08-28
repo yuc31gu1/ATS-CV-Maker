@@ -2,19 +2,30 @@ from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends
 
-from app.dependencies import get_analysis_service, get_job_service
+from app.dependencies import (
+    get_analysis_service,
+    get_job_service,
+    get_matching_service,
+)
 from app.domain.jobs import JOB_TYPE_ANALYZE
+from app.domain.resume import Resume
 from app.errors import NotFoundError
 from app.schemas import (
     JobAnalysisOut,
     JobDescriptionIn,
     JobDescriptionOut,
     JobDescriptionSubmitResponse,
+    MatchOut,
 )
 from app.services.analysis import AnalysisService
 from app.services.jobs import JobService
+from app.services.matching import MatchingService
+from app.services.resume import ResumeService, get_resume_service
 
 router = APIRouter()
+
+MatchingServiceDependency = Annotated[MatchingService, Depends(get_matching_service)]
+ResumeServiceDependency = Annotated[ResumeService, Depends(get_resume_service)]
 
 
 def _run_analyze(
@@ -77,3 +88,25 @@ def get_job_analysis(
         seniority=analysis.seniority,
         requirements=analysis.requirements,
     )
+
+
+def _resolve_resume(resume_service: ResumeService, resume_id: str | None) -> Resume:
+    if resume_id is not None:
+        return resume_service.get(resume_id)
+    resumes = resume_service.list()
+    if not resumes:
+        raise NotFoundError("no master resume found; create one first")
+    return resumes[0]
+
+
+@router.get("/job-descriptions/{job_description_id}/match", response_model=MatchOut)
+def get_job_match(
+    job_description_id: str,
+    matching_service: MatchingServiceDependency,
+    resume_service: ResumeServiceDependency,
+    resume_id: str | None = None,
+) -> MatchOut:
+    """Compute (synchronously, ADR-0003) and persist requirement–evidence matches."""
+    resume = _resolve_resume(resume_service, resume_id)
+    result = matching_service.match_for_job(job_description_id, resume)
+    return MatchOut(**result.model_dump())
