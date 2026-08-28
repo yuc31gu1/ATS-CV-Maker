@@ -194,7 +194,7 @@ def test_match_result_persists_to_postgres() -> None:
             company="Acme",
             role=None,
             location=None,
-            jd_text="Role: Engineer\n- Must have Python and FastAPI\n",
+            jd_text="Role: Engineer\n- Must have Python\n- Must have FastAPI\n",
         )
         jd_service.analyze_job(job_description.id)
 
@@ -202,7 +202,7 @@ def test_match_result_persists_to_postgres() -> None:
         resume = resume_repo.create(
             Resume(
                 personal_information=PersonalInformation(full_name="Ada Lovelace"),
-                skills={"languages": ["Python"]},
+                skills={"languages": ["Python"], "frameworks": ["FastAPI"]},
                 experience=[
                     Experience(
                         company="Acme",
