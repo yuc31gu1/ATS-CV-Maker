@@ -64,17 +64,18 @@ export function Stepper({
       <ol className="flex flex-wrap items-center gap-1">
         {STEPS.map((step, index) => {
           const active = step.key === current;
-          const reached = hrefFor(step.key, jobDescriptionId) !== null;
+          const href = hrefFor(step.key, jobDescriptionId);
+          const reached = href !== null;
           const label = (
             <span className={stepClass(active, reached)}>{step.label}</span>
           );
           return (
             <li key={step.key} className="flex items-center gap-1">
               {index > 0 && <span className="text-slate-300">›</span>}
-              {active || !reached ? (
+              {active || href === null ? (
                 label
               ) : (
-                <Link to={hrefFor(step.key, jobDescriptionId)!}>{label}</Link>
+                <Link to={href}>{label}</Link>
               )}
             </li>
           );

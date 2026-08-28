@@ -1,18 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchApplications, type ApplicationSummary } from "../api/dashboard";
+import { applicationLabel } from "../domain/application";
 
 type LoadState =
   | { phase: "loading" }
   | { phase: "ready"; applications: ApplicationSummary[] }
   | { phase: "error"; message: string };
-
-function applicationLabel(application: ApplicationSummary): string {
-  const parts = [application.company, application.role, application.location].filter(
-    (part): part is string => Boolean(part),
-  );
-  return parts.length > 0 ? parts.join(" · ") : "Untitled application";
-}
 
 function StageBadges({ application }: { application: ApplicationSummary }) {
   const badges: string[] = [];

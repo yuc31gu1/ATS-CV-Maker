@@ -1,18 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchDashboard, type ApplicationSummary, type DashboardSummary } from "../api/dashboard";
+import { applicationLabel } from "../domain/application";
 
 type LoadState =
   | { phase: "loading" }
   | { phase: "ready"; dashboard: DashboardSummary }
   | { phase: "error"; message: string };
-
-function applicationLabel(application: ApplicationSummary): string {
-  const parts = [application.company, application.role, application.location].filter(
-    (part): part is string => Boolean(part),
-  );
-  return parts.length > 0 ? parts.join(" · ") : "Untitled application";
-}
 
 function ApplicationCard({ application }: { application: ApplicationSummary }) {
   const reopened = application.has_generated;
