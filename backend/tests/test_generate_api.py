@@ -1,4 +1,4 @@
-"""The synchronous GENERATE API: render, compile, download PDF and LaTeX."""
+"""The synchronous GENERATE API: render, compile, validate, analyze, download."""
 
 from pathlib import Path
 
@@ -12,11 +12,14 @@ from app.dependencies import (
     get_matching_service,
     get_tailoring_service,
 )
+from app.errors import PdfValidationFailed
 from app.llm.fixture import FixtureLLMProvider
 from app.main import app
+from app.pdf.validator import PdfValidationReport
 from app.repositories.in_memory import InMemoryRepository
 from app.repositories.resume import InMemoryResumeRepository
 from app.services.analysis import AnalysisService
+from app.services.ats import AtsAnalysisService
 from app.services.generation import GenerationService
 from app.services.jobs import JobService
 from app.services.matching import MatchingService
@@ -61,6 +64,33 @@ class FakeCompiler:
         return pdf
 
 
+class FakeValidator:
+    """Accepts the fake PDF and returns a report over the tailored content."""
+
+    def validate(self, pdf_bytes: bytes, tailored) -> PdfValidationReport:
+        skills = " ".join(" ".join(names) for names in tailored.skills.values())
+        text = (
+            f"{tailored.personal_information.full_name} "
+            f"{tailored.personal_information.email} {tailored.summary} {skills}"
+        )
+        return PdfValidationReport(
+            extracted_text=text,
+            page_count=1,
+            single_column=True,
+            standard_headings=True,
+            critical_info_in_body=True,
+            unexpected_tables=0,
+            unexpected_graphics=0,
+        )
+
+
+class FailingValidator(FakeValidator):
+    """Rejects every PDF with a structured PDF_VALIDATION_FAILED."""
+
+    def validate(self, pdf_bytes: bytes, tailored) -> PdfValidationReport:
+        raise PdfValidationFailed("PDF could not be extracted or measured")
+
+
 @pytest.fixture
 def services(tmp_path) -> dict:
     job_service = JobService(InMemoryRepository())
@@ -90,6 +120,11 @@ def services(tmp_path) -> dict:
         generated_repository=InMemoryRepository(),
         storage=LocalStorageService(tmp_path / "storage"),
         compiler=FakeCompiler(),
+        validator=FakeValidator(),
+        ats=AtsAnalysisService(
+            analysis_repository=analysis_repo,
+            match_repository=match_repo,
+        ),
     )
 
     app.dependency_overrides[get_job_service] = lambda: job_service
@@ -210,3 +245,57 @@ def test_generate_is_repeatable_and_stable(api_client: TestClient):
     first.pop("created_at")
     second.pop("created_at")
     assert first == second
+
+
+def test_generated_analysis_reports_measured_checks(api_client: TestClient):
+    job_description_id = seed_tailored_job(api_client)
+    api_client.post(f"/api/job-descriptions/{job_description_id}/generated")
+
+    analysis = api_client.get(
+        f"/api/job-descriptions/{job_description_id}/generated/analysis"
+    )
+    assert analysis.status_code == 200
+    body = analysis.json()
+    assert body["page_count"] == 1
+    assert body["pdf_text_extraction"] is True
+    assert body["single_column"] is True
+    assert body["standard_headings"] is True
+    assert body["critical_info_in_body"] is True
+    assert body["unexpected_tables"] == 0
+    assert body["unexpected_graphics"] == 0
+    assert body["required_keyword_coverage"] == 1.0
+    assert isinstance(body["warnings"], list)
+    assert isinstance(body["unsupported_requirements"], list)
+    assert "ats_score" not in body
+
+
+def test_generated_analysis_missing_before_generation_is_not_found(
+    api_client: TestClient,
+):
+    resp = api_client.get("/api/job-descriptions/jd-missing/generated/analysis")
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "NOT_FOUND"
+
+
+def test_generate_returns_structured_pdf_validation_failed(services: dict, api_client):
+    job_description_id = seed_tailored_job(api_client)
+    failing_service = GenerationService(
+        tailored_repository=services["tailoring_service"]._tailored,
+        generated_repository=InMemoryRepository(),
+        storage=LocalStorageService(Path("unused")),
+        compiler=FakeCompiler(),
+        validator=FailingValidator(),
+        ats=services["generation_service"]._ats,
+    )
+    app.dependency_overrides[get_generation_service] = lambda: failing_service
+    try:
+        resp = api_client.post(
+            f"/api/job-descriptions/{job_description_id}/generated"
+        )
+        assert resp.status_code == 502
+        assert resp.json()["error"]["code"] == "PDF_VALIDATION_FAILED"
+        assert resp.json()["error"]["message"]
+    finally:
+        app.dependency_overrides[get_generation_service] = services[
+            "generation_service"
+        ]

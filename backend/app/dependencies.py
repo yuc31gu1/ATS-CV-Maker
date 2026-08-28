@@ -8,9 +8,11 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db import SessionLocal
 from app.llm.fixture import FixtureLLMProvider
+from app.pdf.validator import PdfValidator
 from app.repositories import mappers
 from app.repositories.sqlalchemy import SqlAlchemyRepository
 from app.services.analysis import AnalysisService
+from app.services.ats import AtsAnalysisService
 from app.services.generation import GenerationService
 from app.services.jobs import JobService
 from app.services.matching import MatchingService
@@ -115,9 +117,30 @@ def get_storage_service() -> LocalStorageService:
     return LocalStorageService(Path(settings.storage_root))
 
 
+def get_pdf_validator() -> PdfValidator:
+    return PdfValidator()
+
+
+def get_ats_analysis_service(
+    db: Annotated[Session, Depends(get_db)],
+) -> AtsAnalysisService:
+    from app.models import JobAnalysis, MatchResultRow
+
+    return AtsAnalysisService(
+        analysis_repository=SqlAlchemyRepository(
+            db, JobAnalysis, mappers.job_analysis_to_row, mappers.job_analysis_from_row
+        ),
+        match_repository=SqlAlchemyRepository(
+            db, MatchResultRow, mappers.match_result_to_row, mappers.match_result_from_row
+        ),
+    )
+
+
 def get_generation_service(
     db: Annotated[Session, Depends(get_db)],
     storage: Annotated[LocalStorageService, Depends(get_storage_service)],
+    validator: Annotated[PdfValidator, Depends(get_pdf_validator)],
+    ats: Annotated[AtsAnalysisService, Depends(get_ats_analysis_service)],
 ) -> GenerationService:
     from app.models import GeneratedResumeRow, TailoredResumeRow
 
@@ -135,4 +158,6 @@ def get_generation_service(
             mappers.generated_resume_from_row,
         ),
         storage=storage,
+        validator=validator,
+        ats=ats,
     )

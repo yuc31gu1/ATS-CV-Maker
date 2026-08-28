@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Response
 
 from app.dependencies import get_generation_service
+from app.domain.ats import ATSAnalysis
 from app.domain.generated import GeneratedResume
 from app.errors import NotFoundError
 from app.services.generation import GenerationService
@@ -49,6 +50,24 @@ def get_generated(
 ) -> GeneratedResume:
     """Fetch the Generated Resume metadata for the job description."""
     return _require_generated(generation_service, job_description_id)
+
+
+@router.get(
+    "/job-descriptions/{job_description_id}/generated/analysis",
+    response_model=ATSAnalysis,
+)
+def get_generated_analysis(
+    job_description_id: str,
+    generation_service: GenerationServiceDependency,
+) -> ATSAnalysis:
+    """Fetch the measured ATS Compatibility Analysis for the job description."""
+    generated = _require_generated(generation_service, job_description_id)
+    if generated.ats_analysis is None:
+        raise NotFoundError(
+            "ats analysis not found",
+            details={"job_description_id": job_description_id},
+        )
+    return generated.ats_analysis
 
 
 @router.get(

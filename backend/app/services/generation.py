@@ -1,4 +1,4 @@
-"""GENERATE stage: render the Tailored Resume to LaTeX and compile to PDF."""
+"""GENERATE stage: render, compile, validate, and analyze the Tailored Resume."""
 
 import tempfile
 from pathlib import Path
@@ -8,7 +8,9 @@ from app.domain.tailoring import TailoredResume
 from app.errors import NotFoundError, StorageFileNotFound
 from app.latex.compiler import LatexCompiler
 from app.latex.render import LatexRenderingService
+from app.pdf.validator import PdfValidator
 from app.repositories.base import EntityRepository
+from app.services.ats import AtsAnalysisService
 from app.storage.base import StorageService
 from app.time import utcnow
 
@@ -17,10 +19,13 @@ class GenerationService:
     """Deterministic, synchronous document generation (ADR-0003).
 
     Renders the Tailored Resume through LatexRenderingService, compiles with
-    pdflatex in an isolated temp directory, then stores the ``.tex`` source
-    and the PDF through the StorageService abstraction. Files are keyed by the
-    job description id (the stepper session root); the persisted bundle pins
-    to the Tailored Resume's ResumeVersion (ADR-0004).
+    pdflatex in an isolated temp directory, then validates the PDF through
+    PdfValidator before it can be presented as final (T7). A validated PDF is
+    measured into an ATS Compatibility Analysis via AtsAnalysisService; both
+    the ``.tex`` source and the PDF are stored through the StorageService
+    abstraction. Files are keyed by the job description id (the stepper
+    session root); the persisted bundle pins to the Tailored Resume's
+    ResumeVersion (ADR-0004).
     """
 
     def __init__(
@@ -29,14 +34,18 @@ class GenerationService:
         tailored_repository: EntityRepository[TailoredResume],
         generated_repository: EntityRepository[GeneratedResume],
         storage: StorageService,
+        ats: AtsAnalysisService,
         renderer: LatexRenderingService | None = None,
         compiler: LatexCompiler | None = None,
+        validator: PdfValidator | None = None,
     ) -> None:
         self._tailored = tailored_repository
         self._generated = generated_repository
         self._storage = storage
+        self._ats = ats
         self._renderer = renderer or LatexRenderingService()
         self._compiler = compiler or LatexCompiler()
+        self._validator = validator or PdfValidator()
 
     def get(self, job_description_id: str) -> GeneratedResume | None:
         return self._generated.get(job_description_id)
@@ -50,6 +59,8 @@ class GenerationService:
             )
         tex = self._renderer.render(tailored)
         pdf_bytes = self._compile(tex)
+        report = self._validator.validate(pdf_bytes, tailored)
+        analysis = self._ats.analyze(job_description_id, tailored, report)
         latex_key = f"latex/{job_description_id}.tex"
         pdf_key = f"pdf/{job_description_id}.pdf"
         self._storage.save(latex_key, tex.encode("utf-8"))
@@ -60,6 +71,7 @@ class GenerationService:
             resume_id=tailored.resume_id,
             latex_key=latex_key,
             pdf_key=pdf_key,
+            ats_analysis=analysis,
             created_at=utcnow(),
         )
         return self._generated.add(job_description_id, generated)

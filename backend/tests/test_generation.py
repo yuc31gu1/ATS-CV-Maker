@@ -1,15 +1,17 @@
-"""GenerationService: render -> compile -> store through StorageService."""
+"""GenerationService: render -> compile -> validate -> store through StorageService."""
 
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
+from app.domain.ats import ATSAnalysis
 from app.domain.generated import GeneratedResume
 from app.domain.resume import Experience, MonthYear, PersonalInformation
 from app.domain.tailoring import TailoredResume
 from app.errors import NotFoundError, StorageFileNotFound
 from app.latex.compiler import LatexCompiler
+from app.pdf.validator import PdfValidationReport
 from app.repositories.in_memory import InMemoryRepository
 from app.services.generation import GenerationService
 from app.storage.base import StorageService
@@ -31,6 +33,38 @@ class FakeCompiler:
             return pdf
         pdf.write_bytes(b"corrupt-bytes" if self.corrupt else b"%PDF-1.4 fake output")
         return pdf
+
+
+class FakeValidator:
+    """Passes every PDF; the ATS report is what generation persists."""
+
+    def validate(self, pdf_bytes: bytes, tailored: TailoredResume) -> PdfValidationReport:
+        return PdfValidationReport(
+            extracted_text="Ada Lovelace ada@example.com",
+            page_count=1,
+            single_column=True,
+            standard_headings=True,
+            critical_info_in_body=True,
+            unexpected_tables=0,
+            unexpected_graphics=0,
+        )
+
+
+class FakeAtsService:
+    """Computes a minimal measured ATS analysis without any repositories."""
+
+    def analyze(
+        self, job_description_id: str, tailored: TailoredResume, report: PdfValidationReport
+    ) -> ATSAnalysis:
+        return ATSAnalysis(
+            pdf_text_extraction=True,
+            single_column=report.single_column,
+            standard_headings=report.standard_headings,
+            critical_info_in_body=report.critical_info_in_body,
+            unexpected_tables=report.unexpected_tables,
+            unexpected_graphics=report.unexpected_graphics,
+            page_count=report.page_count,
+        )
 
 
 class SwappableStorage:
@@ -85,6 +119,8 @@ def service(tmp_path) -> tuple[GenerationService, InMemoryRepository, LocalStora
         generated_repository=generated_repo,
         storage=storage,
         compiler=FakeCompiler(),
+        validator=FakeValidator(),
+        ats=FakeAtsService(),
     )
     return svc, tailored_repo, storage
 
@@ -162,6 +198,8 @@ def test_storage_is_swappable_without_redesign(tmp_path):
         generated_repository=generated_repo,
         storage=storage,
         compiler=FakeCompiler(),
+        validator=FakeValidator(),
+        ats=FakeAtsService(),
     )
     tailored_repo.add("jd-1", _tailored())
 
@@ -185,6 +223,8 @@ def test_generate_compiles_a_real_pdf(tmp_path):
         generated_repository=generated_repo,
         storage=LocalStorageService(tmp_path / "storage"),
         compiler=LatexCompiler(timeout=60.0),
+        validator=FakeValidator(),
+        ats=FakeAtsService(),
     )
     tailored_repo.add("jd-1", _tailored())
 

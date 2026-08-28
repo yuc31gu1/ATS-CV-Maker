@@ -44,6 +44,11 @@ class LatexCompilationFailed(AppError):
     status_code = 502
 
 
+class PdfValidationFailed(AppError):
+    code = "PDF_VALIDATION_FAILED"
+    status_code = 502
+
+
 class StorageFileNotFound(AppError):
     code = "FILE_NOT_FOUND"
     status_code = 404
