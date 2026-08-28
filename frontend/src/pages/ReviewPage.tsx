@@ -296,12 +296,20 @@ export function ReviewPage() {
               Resume is never mutated.
             </p>
           </div>
-          <Link
-            to={`/create/match?jd=${jobDescriptionId}`}
-            className="shrink-0 rounded-md bg-white px-3 py-1.5 text-sm font-medium text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50"
-          >
-            ← Back to matches
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              to={`/create/match?jd=${jobDescriptionId}`}
+              className="shrink-0 rounded-md bg-white px-3 py-1.5 text-sm font-medium text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-50"
+            >
+              ← Back to matches
+            </Link>
+            <Link
+              to={`/create/result?jd=${jobDescriptionId}`}
+              className="shrink-0 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
+            >
+              Generate & analyze →
+            </Link>
+          </div>
         </div>
 
         {phase.name === "starting" && (

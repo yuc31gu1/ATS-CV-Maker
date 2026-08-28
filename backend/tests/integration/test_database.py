@@ -394,10 +394,12 @@ def test_generated_resume_persists_to_postgres() -> None:
         ResumeVersionRow,
         TailoredResumeRow,
     )
+    from app.pdf.validator import PdfValidationReport
     from app.repositories import mappers
     from app.repositories.resume import SqlAlchemyResumeRepository
     from app.repositories.sqlalchemy import SqlAlchemyRepository
     from app.services.analysis import AnalysisService
+    from app.services.ats import AtsAnalysisService
     from app.services.generation import GenerationService
     from app.services.jobs import JobService
     from app.services.matching import MatchingService
@@ -410,6 +412,23 @@ def test_generated_resume_persists_to_postgres() -> None:
             pdf = work_dir / "main.pdf"
             pdf.write_bytes(b"%PDF-1.4 fake generated output")
             return pdf
+
+    class FakeValidator:
+        def validate(self, pdf_bytes: bytes, tailored) -> PdfValidationReport:
+            skills = " ".join(" ".join(names) for names in tailored.skills.values())
+            text = (
+                f"{tailored.personal_information.full_name} "
+                f"{tailored.personal_information.email} {tailored.summary} {skills}"
+            )
+            return PdfValidationReport(
+                extracted_text=text,
+                page_count=1,
+                single_column=True,
+                standard_headings=True,
+                critical_info_in_body=True,
+                unexpected_tables=0,
+                unexpected_graphics=0,
+            )
 
     resume_payload = {
         "schema_version": 1,
@@ -497,6 +516,18 @@ def test_generated_resume_persists_to_postgres() -> None:
             ),
             llm_provider=FixtureLLMProvider(),
         )
+        analysis_repo = SqlAlchemyRepository(
+            session,
+            JobAnalysis,
+            mappers.job_analysis_to_row,
+            mappers.job_analysis_from_row,
+        )
+        match_repo = SqlAlchemyRepository(
+            session,
+            MatchResultRow,
+            mappers.match_result_to_row,
+            mappers.match_result_from_row,
+        )
         generation_service = GenerationService(
             tailored_repository=tailored_repo,
             generated_repository=SqlAlchemyRepository(
@@ -507,6 +538,11 @@ def test_generated_resume_persists_to_postgres() -> None:
             ),
             storage=LocalStorageService(Path(tempfile.mkdtemp(prefix="ats-gen-"))),
             compiler=FakeCompiler(),
+            validator=FakeValidator(),
+            ats=AtsAnalysisService(
+                analysis_repository=analysis_repo,
+                match_repository=match_repo,
+            ),
         )
 
         app.dependency_overrides[get_job_service] = lambda: job_service
@@ -568,6 +604,9 @@ def test_generated_resume_persists_to_postgres() -> None:
                 assert generated_row.resume_id == resume_id
                 stored = GeneratedResume.model_validate(generated_row.data)
                 assert stored.job_description_id == job_description_id
+                assert stored.ats_analysis is not None
+                assert stored.ats_analysis.page_count == 1
+                assert stored.ats_analysis.required_keyword_coverage is not None
         finally:
             app.dependency_overrides.clear()
 

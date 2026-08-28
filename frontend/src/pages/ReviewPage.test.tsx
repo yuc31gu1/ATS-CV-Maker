@@ -208,6 +208,14 @@ describe("ReviewPage", () => {
     expect((await screen.findAllByText("Built the ordering API with FastAPI")).length).toBe(2);
   });
 
+  it("links forward to the generated result step", async () => {
+    renderPage();
+
+    expect(
+      await screen.findByRole("link", { name: /Generate & analyze/ }),
+    ).toHaveAttribute("href", "/create/result?jd=jd-1");
+  });
+
   it("warns when no master resume exists", async () => {
     vi.mocked(fetchTailored).mockRejectedValue(new Error("tailored resume not found"));
     vi.mocked(listResumes).mockResolvedValue([]);
