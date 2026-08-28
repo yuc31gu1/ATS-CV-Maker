@@ -5,6 +5,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# LaTeX tooling for deterministic document generation (spec PRD, T6):
+# pdflatex plus the template packages (geometry, lmodern, enumitem,
+# titlesec, hyperref, glyphtounicode) and poppler-utils for PDF validation.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    texlive-latex-base \
+    texlive-latex-recommended \
+    texlive-latex-extra \
+    texlive-fonts-recommended \
+    texlive-plain-generic \
+    poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY pyproject.toml alembic.ini ./
 COPY alembic ./alembic
 COPY app ./app

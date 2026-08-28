@@ -7,6 +7,7 @@ generic ``SqlAlchemyRepository`` never sees an unmapped object.
 
 from app import models
 from app.domain.analysis import JobAnalysis, JobDescription
+from app.domain.generated import GeneratedResume
 from app.domain.jobs import Job
 from app.domain.matching import EvidenceMatch, MatchResult
 from app.domain.resume import Resume
@@ -136,3 +137,18 @@ def tailored_resume_to_row(entity: TailoredResume) -> models.TailoredResumeRow:
 
 def tailored_resume_from_row(row: models.TailoredResumeRow) -> TailoredResume:
     return TailoredResume.model_validate(row.data)
+
+
+def generated_resume_to_row(entity: GeneratedResume) -> models.GeneratedResumeRow:
+    return models.GeneratedResumeRow(
+        id=entity.job_description_id,
+        job_description_id=entity.job_description_id,
+        resume_version_id=entity.resume_version_id,
+        resume_id=entity.resume_id,
+        data=entity.model_dump(mode="json"),
+        created_at=entity.created_at,
+    )
+
+
+def generated_resume_from_row(row: models.GeneratedResumeRow) -> GeneratedResume:
+    return GeneratedResume.model_validate(row.data)

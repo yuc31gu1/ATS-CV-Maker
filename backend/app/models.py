@@ -111,3 +111,22 @@ class TailoredResumeRow(Base):
     resume_id: Mapped[str] = mapped_column(String(36), nullable=False)
     data: Mapped[dict[str, Any]] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class GeneratedResumeRow(Base):
+    """Persisted delivery bundle: Tailored Resume rendered to LaTeX + PDF.
+
+    Pins to the immutable ResumeVersion (ADR-0004); the LaTeX source and the
+    compiled PDF live in StorageService under the keys stored in ``data``.
+    """
+
+    __tablename__ = "generated_resumes"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    job_description_id: Mapped[str] = mapped_column(
+        ForeignKey("job_descriptions.id"), unique=True, index=True
+    )
+    resume_version_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    resume_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

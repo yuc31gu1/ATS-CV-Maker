@@ -5,6 +5,7 @@ class Settings(BaseSettings):
     app_name: str = "ats-cv-backend"
     database_url: str = "postgresql+psycopg://ats:ats@localhost:5432/ats"
     llm_provider: str = "fixture"
+    storage_root: str = "/storage"
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="ATS_")
 

@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends
@@ -10,9 +11,11 @@ from app.llm.fixture import FixtureLLMProvider
 from app.repositories import mappers
 from app.repositories.sqlalchemy import SqlAlchemyRepository
 from app.services.analysis import AnalysisService
+from app.services.generation import GenerationService
 from app.services.jobs import JobService
 from app.services.matching import MatchingService
 from app.services.tailoring import TailoringService
+from app.storage.local import LocalStorageService
 
 _LLM_PROVIDER = FixtureLLMProvider()
 
@@ -105,4 +108,31 @@ def get_tailoring_service(
             db, MatchResultRow, mappers.match_result_to_row, mappers.match_result_from_row
         ),
         llm_provider=llm_provider,
+    )
+
+
+def get_storage_service() -> LocalStorageService:
+    return LocalStorageService(Path(settings.storage_root))
+
+
+def get_generation_service(
+    db: Annotated[Session, Depends(get_db)],
+    storage: Annotated[LocalStorageService, Depends(get_storage_service)],
+) -> GenerationService:
+    from app.models import GeneratedResumeRow, TailoredResumeRow
+
+    return GenerationService(
+        tailored_repository=SqlAlchemyRepository(
+            db,
+            TailoredResumeRow,
+            mappers.tailored_resume_to_row,
+            mappers.tailored_resume_from_row,
+        ),
+        generated_repository=SqlAlchemyRepository(
+            db,
+            GeneratedResumeRow,
+            mappers.generated_resume_to_row,
+            mappers.generated_resume_from_row,
+        ),
+        storage=storage,
     )
