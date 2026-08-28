@@ -51,7 +51,15 @@ class MatchingService:
         return self._matches.get(job_description_id)
 
     def match_for_job(self, job_description_id: str, resume: Resume) -> MatchResult:
-        """Match a stored Job Analysis against a Master Resume and persist."""
+        """Return a persisted match result, or match and persist one.
+
+        Back-navigation re-fetches the stored result for the same Master
+        Resume without recomputing or re-running anything; a result is only
+        computed when none exists (or the resume differs).
+        """
+        existing = self._matches.get(job_description_id)
+        if existing is not None and existing.resume_id == (resume.id or ""):
+            return existing
         analysis = self._analyses.get(job_description_id)
         if analysis is None:
             raise NotFoundError(
@@ -59,8 +67,6 @@ class MatchingService:
                 details={"job_description_id": job_description_id},
             )
         result = self.match(analysis, resume)
-        existing = self._matches.get(job_description_id)
-        result.created_at = existing.created_at if existing is not None else utcnow()
         return self._matches.add(job_description_id, result)
 
     def match(self, analysis: JobAnalysis, resume: Resume) -> MatchResult:

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { Stepper } from "../components/Stepper";
 import {
   fetchGenerated,
   generateDocument,
@@ -168,6 +169,7 @@ export function ResultPage() {
   return (
     <main className="min-h-screen bg-slate-50">
       <div className="mx-auto max-w-5xl px-4 py-10">
+        <Stepper current="export" jobDescriptionId={jobDescriptionId} />
         <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-xl font-semibold text-slate-900">Generated PDF & ATS Analysis</h1>

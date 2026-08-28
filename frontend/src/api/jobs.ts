@@ -50,6 +50,15 @@ export interface JobAnalysis {
   requirements: JobRequirement[];
 }
 
+export interface JobDescription {
+  id: string;
+  company: string | null;
+  role: string | null;
+  location: string | null;
+  jd_text: string;
+  created_at: string;
+}
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
 async function errorMessage(res: Response, fallback: string): Promise<string> {
@@ -81,6 +90,41 @@ export async function fetchJob(jobId: string, signal?: AbortSignal): Promise<Job
     throw new Error(await errorMessage(res, `Job poll failed with status ${res.status}`));
   }
   return (await res.json()) as JobPayload;
+}
+
+export async function listJobs(
+  type?: string,
+  jobDescriptionId?: string,
+  signal?: AbortSignal,
+): Promise<JobPayload[]> {
+  const params = new URLSearchParams();
+  if (type) {
+    params.set("type", type);
+  }
+  if (jobDescriptionId) {
+    params.set("job_description_id", jobDescriptionId);
+  }
+  const query = params.size > 0 ? `?${params.toString()}` : "";
+  const res = await fetch(`${API_BASE_URL}/jobs${query}`, { signal });
+  if (!res.ok) {
+    throw new Error(await errorMessage(res, `Job list failed with status ${res.status}`));
+  }
+  return (await res.json()) as JobPayload[];
+}
+
+export async function fetchJobDescription(
+  jobDescriptionId: string,
+  signal?: AbortSignal,
+): Promise<JobDescription> {
+  const res = await fetch(`${API_BASE_URL}/job-descriptions/${jobDescriptionId}`, {
+    signal,
+  });
+  if (!res.ok) {
+    throw new Error(
+      await errorMessage(res, `Job description fetch failed with status ${res.status}`),
+    );
+  }
+  return (await res.json()) as JobDescription;
 }
 
 export async function fetchJobAnalysis(

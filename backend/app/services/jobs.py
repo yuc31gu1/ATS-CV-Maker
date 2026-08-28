@@ -36,6 +36,24 @@ class JobService:
             raise NotFoundError("job not found", details={"id": job_id})
         return job
 
+    def list(
+        self,
+        *,
+        job_type: str | None = None,
+        job_description_id: str | None = None,
+    ) -> list[Job]:
+        """All jobs, newest first, optionally filtered by type and session root."""
+        jobs = sorted(self._jobs.list(), key=lambda job: job.created_at, reverse=True)
+        if job_type is not None:
+            jobs = [job for job in jobs if job.type == job_type]
+        if job_description_id is not None:
+            jobs = [
+                job
+                for job in jobs
+                if job.payload.get("job_description_id") == job_description_id
+            ]
+        return jobs
+
     def execute(self, job_id: str, handler) -> dict | None:
         """Run the in-process worker: PENDING -> RUNNING -> SUCCEEDED/FAILED."""
         self.mark_running(job_id)

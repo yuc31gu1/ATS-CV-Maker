@@ -1,8 +1,11 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { Stepper } from "../components/Stepper";
 import {
   fetchJob,
   fetchJobAnalysis,
+  fetchJobDescription,
+  listJobs,
   submitJobDescription,
   type JobAnalysis,
   type JobRequirement,
@@ -11,6 +14,7 @@ import {
 
 type Phase =
   | { name: "form" }
+  | { name: "restoring" }
   | { name: "submitting" }
   | { name: "analyzing"; jobDescriptionId: string; jobId: string }
   | { name: "done"; analysis: JobAnalysis }
@@ -49,11 +53,14 @@ const inputClass =
   "mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500";
 
 export function JobAnalysisPage() {
+  const [searchParams] = useSearchParams();
   const [phase, setPhase] = useState<Phase>({ name: "form" });
   const [company, setCompany] = useState("");
   const [role, setRole] = useState("");
   const [location, setLocation] = useState("");
   const [jdText, setJdText] = useState("");
+
+  const jobDescriptionId = searchParams.get("jd") ?? "";
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -77,6 +84,56 @@ export function JobAnalysisPage() {
       setPhase({ name: "error", message: err instanceof Error ? err.message : String(err) });
     }
   }
+
+  async function restore(jobDescriptionId: string) {
+    setPhase({ name: "restoring" });
+    try {
+      const jobDescription = await fetchJobDescription(jobDescriptionId);
+      setCompany(jobDescription.company ?? "");
+      setRole(jobDescription.role ?? "");
+      setLocation(jobDescription.location ?? "");
+      setJdText(jobDescription.jd_text);
+    } catch (err) {
+      setPhase({ name: "error", message: err instanceof Error ? err.message : String(err) });
+      return;
+    }
+    try {
+      const analysis = await fetchJobAnalysis(jobDescriptionId);
+      setPhase({ name: "done", analysis });
+      return;
+    } catch {
+      // no stored analysis yet — check for an in-flight ANALYZE job below
+    }
+    try {
+      const jobs = await listJobs("ANALYZE", jobDescriptionId);
+      const latest = jobs[0];
+      if (latest !== undefined) {
+        if (latest.status === "FAILED") {
+          setPhase({
+            name: "error",
+            message: latest.error?.message ?? "Job analysis failed",
+          });
+          return;
+        }
+        if (latest.status === "SUCCEEDED") {
+          const analysis = await fetchJobAnalysis(jobDescriptionId);
+          setPhase({ name: "done", analysis });
+          return;
+        }
+        setPhase({ name: "analyzing", jobDescriptionId, jobId: latest.id });
+        return;
+      }
+    } catch {
+      // ignore job-list errors; fall through to the restored form
+    }
+    setPhase({ name: "form" });
+  }
+
+  useEffect(() => {
+    if (jobDescriptionId) {
+      void restore(jobDescriptionId);
+    }
+  }, []);
 
   useEffect(() => {
     if (phase.name !== "analyzing") {
@@ -116,6 +173,7 @@ export function JobAnalysisPage() {
   return (
     <main className="min-h-screen bg-slate-50">
       <div className="mx-auto max-w-2xl px-4 py-10">
+        <Stepper current={jobDescriptionId ? "analysis" : "job"} jobDescriptionId={jobDescriptionId} />
         <h1 className="text-xl font-semibold text-slate-900">Job Analysis</h1>
         <p className="mt-1 text-sm text-slate-500">
           Paste a Job Description to extract the role, required skills, preferred skills, and
@@ -168,6 +226,10 @@ export function JobAnalysisPage() {
               Analyze
             </button>
           </form>
+        )}
+
+        {phase.name === "restoring" && (
+          <p className="mt-6 text-sm text-slate-500">Restoring your session…</p>
         )}
 
         {phase.name === "submitting" && (

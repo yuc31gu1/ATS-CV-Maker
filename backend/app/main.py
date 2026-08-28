@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.api import generation, health, job_descriptions, jobs, tailoring
+from app.api import dashboard, generation, health, job_descriptions, jobs, tailoring
 from app.api.resumes import router as resumes_router
 from app.config import settings
 from app.errors import register_exception_handlers
@@ -12,4 +12,5 @@ app.include_router(job_descriptions.router, prefix="/api")
 app.include_router(jobs.router, prefix="/api")
 app.include_router(tailoring.router, prefix="/api")
 app.include_router(generation.router, prefix="/api")
+app.include_router(dashboard.router, prefix="/api")
 register_exception_handlers(app)

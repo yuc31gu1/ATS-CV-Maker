@@ -13,6 +13,7 @@ from app.repositories import mappers
 from app.repositories.sqlalchemy import SqlAlchemyRepository
 from app.services.analysis import AnalysisService
 from app.services.ats import AtsAnalysisService
+from app.services.dashboard import DashboardService
 from app.services.generation import GenerationService
 from app.services.jobs import JobService
 from app.services.matching import MatchingService
@@ -160,4 +161,41 @@ def get_generation_service(
         storage=storage,
         validator=validator,
         ats=ats,
+    )
+
+
+def get_dashboard_service(
+    db: Annotated[Session, Depends(get_db)],
+) -> DashboardService:
+    from app.models import (
+        GeneratedResumeRow,
+        JobAnalysis,
+        JobDescription,
+        TailoredResumeRow,
+    )
+    from app.repositories.resume import SqlAlchemyResumeRepository
+
+    return DashboardService(
+        resume_repository=SqlAlchemyResumeRepository(SessionLocal),
+        jd_repository=SqlAlchemyRepository(
+            db,
+            JobDescription,
+            mappers.job_description_to_row,
+            mappers.job_description_from_row,
+        ),
+        analysis_repository=SqlAlchemyRepository(
+            db, JobAnalysis, mappers.job_analysis_to_row, mappers.job_analysis_from_row
+        ),
+        tailored_repository=SqlAlchemyRepository(
+            db,
+            TailoredResumeRow,
+            mappers.tailored_resume_to_row,
+            mappers.tailored_resume_from_row,
+        ),
+        generated_repository=SqlAlchemyRepository(
+            db,
+            GeneratedResumeRow,
+            mappers.generated_resume_to_row,
+            mappers.generated_resume_from_row,
+        ),
     )

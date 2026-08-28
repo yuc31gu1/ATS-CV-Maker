@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { Stepper } from "../components/Stepper";
 import { fetchJob } from "../api/jobs";
 import { listResumes } from "../api/resume";
 import {
@@ -287,6 +288,7 @@ export function ReviewPage() {
   return (
     <main className="min-h-screen bg-slate-50">
       <div className="mx-auto max-w-4xl px-4 py-10">
+        <Stepper current="review" jobDescriptionId={jobDescriptionId} />
         <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-xl font-semibold text-slate-900">Tailoring Review</h1>

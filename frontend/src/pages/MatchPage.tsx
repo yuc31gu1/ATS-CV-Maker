@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { fetchMatch, type EvidenceMatch, type MatchResult, type MatchStatus } from "../api/match";
 import { listResumes } from "../api/resume";
+import { Stepper } from "../components/Stepper";
 
 type Phase =
   | { name: "form" }
@@ -94,6 +95,7 @@ export function MatchPage() {
   return (
     <main className="min-h-screen bg-slate-50">
       <div className="mx-auto max-w-4xl px-4 py-10">
+        <Stepper current="match" jobDescriptionId={jdId} />
         <h1 className="text-xl font-semibold text-slate-900">Candidate Evidence Matching</h1>
         <p className="mt-1 text-sm text-slate-500">
           Every job requirement is matched against evidence in your Master Resume. Statuses are
