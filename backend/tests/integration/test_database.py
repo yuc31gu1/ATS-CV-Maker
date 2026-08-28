@@ -236,3 +236,123 @@ def test_match_result_persists_to_postgres() -> None:
         assert loaded.resume_id == resume.id
         assert loaded.matches[0]["status"] == "STRONG_MATCH"
         assert loaded.matches[1]["status"] == "PARTIAL_MATCH"
+
+
+@pytest.mark.skipif(shutil.which("docker") is None, reason="Docker unavailable")
+def test_match_endpoint_end_to_end_on_postgres() -> None:
+    """The HTTP /match route against real Postgres-backed services.
+
+    Covers the wiring behind commit "fix T4 match persistence": submit a
+    resume and a job description over HTTP (background ANALYZE included), then
+    match over HTTP and re-fetch to confirm a stable persisted row.
+    """
+    from fastapi.testclient import TestClient
+    from sqlalchemy.orm import Session, sessionmaker
+
+    from app.dependencies import (
+        get_analysis_service,
+        get_job_service,
+        get_matching_service,
+    )
+    from app.domain.resume import Experience, PersonalInformation, Resume
+    from app.llm.fixture import FixtureLLMProvider
+    from app.models import Job, JobAnalysis, JobDescription, MatchResultRow
+    from app.repositories import mappers
+    from app.repositories.resume import SqlAlchemyResumeRepository
+    from app.repositories.sqlalchemy import SqlAlchemyRepository
+    from app.services.analysis import AnalysisService
+    from app.services.jobs import JobService
+    from app.services.matching import MatchingService
+    from app.services.resume import ResumeService, get_resume_service
+
+    resume_payload = {
+        "schema_version": 1,
+        "personal_information": {"full_name": "Ada Lovelace"},
+        "skills": {"languages": ["Python"], "frameworks": ["FastAPI"]},
+        "experience": [
+            {
+                "company": "Acme",
+                "title": "Engineer",
+                "start_date": "2021-03",
+                "bullets": ["Shipped Python services"],
+            }
+        ],
+    }
+
+    with PostgresContainer("postgres:16-alpine") as postgres:
+        url = _psycopg_url(postgres)
+        command.upgrade(_alembic_config(url), "head")
+
+        engine = create_engine(url)
+        session = Session(engine)
+        session_factory = sessionmaker(bind=engine)
+
+        analysis_service = AnalysisService(
+            jd_repository=SqlAlchemyRepository(
+                session,
+                JobDescription,
+                mappers.job_description_to_row,
+                mappers.job_description_from_row,
+            ),
+            analysis_repository=SqlAlchemyRepository(
+                session,
+                JobAnalysis,
+                mappers.job_analysis_to_row,
+                mappers.job_analysis_from_row,
+            ),
+            llm_provider=FixtureLLMProvider(),
+        )
+        job_service = JobService(
+            SqlAlchemyRepository(session, Job, mappers.job_to_row, mappers.job_from_row)
+        )
+        matching_service = MatchingService(
+            analysis_repository=SqlAlchemyRepository(
+                session,
+                JobAnalysis,
+                mappers.job_analysis_to_row,
+                mappers.job_analysis_from_row,
+            ),
+            match_repository=SqlAlchemyRepository(
+                session,
+                MatchResultRow,
+                mappers.match_result_to_row,
+                mappers.match_result_from_row,
+            ),
+        )
+        resume_service = ResumeService(SqlAlchemyResumeRepository(session_factory))
+
+        app.dependency_overrides[get_job_service] = lambda: job_service
+        app.dependency_overrides[get_analysis_service] = lambda: analysis_service
+        app.dependency_overrides[get_matching_service] = lambda: matching_service
+        app.dependency_overrides[get_resume_service] = lambda: resume_service
+
+        try:
+            with TestClient(app) as client:
+                resume_resp = client.post("/api/resumes", json=resume_payload)
+                assert resume_resp.status_code == 201
+                resume_id = resume_resp.json()["id"]
+
+                submitted = client.post(
+                    "/api/job-descriptions",
+                    json={
+                        "jd_text": "Role: Engineer\n- Must have Python\n- Must have FastAPI\n"
+                    },
+                )
+                assert submitted.status_code == 201
+                job_description_id = submitted.json()["job_description_id"]
+
+                url_match = (
+                    f"/api/job-descriptions/{job_description_id}/match"
+                )
+                first = client.get(url_match, params={"resume_id": resume_id})
+                assert first.status_code == 200
+                body = first.json()
+                by_requirement = {m["requirement"]: m for m in body["matches"]}
+                assert by_requirement["Must have Python"]["status"] == "STRONG_MATCH"
+                assert by_requirement["Must have FastAPI"]["status"] == "PARTIAL_MATCH"
+
+                second = client.get(url_match, params={"resume_id": resume_id})
+                assert second.status_code == 200
+                assert second.json() == body
+        finally:
+            app.dependency_overrides.clear()
