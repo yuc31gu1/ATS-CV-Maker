@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type HTMLInputTypeAttribute, type ReactNode } from "react";
 import {
   createResume,
   listResumes,
@@ -6,6 +6,7 @@ import {
   type Certification,
   type Education,
   type Experience,
+  type PersonalInformation,
   type Project,
   type Resume,
 } from "../api/resume";
@@ -141,7 +142,7 @@ function TextField({
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  type?: string;
+  type?: HTMLInputTypeAttribute;
 }) {
   return (
     <label className="block">
@@ -155,6 +156,13 @@ function TextField({
       />
     </label>
   );
+}
+
+function updatePersonalInformation(resume: Resume, patch: Partial<PersonalInformation>): Resume {
+  return {
+    ...resume,
+    personal_information: { ...resume.personal_information, ...patch },
+  };
 }
 
 function PersonalInformationSection({
@@ -171,33 +179,33 @@ function PersonalInformationSection({
         <TextField
           label="Full name"
           value={info.full_name}
-          onChange={(full_name) => update((r) => ({ ...r, personal_information: { ...r.personal_information, full_name } }))}
+          onChange={(full_name) => update((r) => updatePersonalInformation(r, { full_name }))}
         />
         <TextField
           label="Headline"
           value={info.headline}
-          onChange={(headline) => update((r) => ({ ...r, personal_information: { ...r.personal_information, headline } }))}
+          onChange={(headline) => update((r) => updatePersonalInformation(r, { headline }))}
         />
         <TextField
           label="Email"
           type="email"
           value={info.email}
-          onChange={(email) => update((r) => ({ ...r, personal_information: { ...r.personal_information, email } }))}
+          onChange={(email) => update((r) => updatePersonalInformation(r, { email }))}
         />
         <TextField
           label="Phone"
           value={info.phone}
-          onChange={(phone) => update((r) => ({ ...r, personal_information: { ...r.personal_information, phone } }))}
+          onChange={(phone) => update((r) => updatePersonalInformation(r, { phone }))}
         />
         <TextField
           label="Location"
           value={info.location}
-          onChange={(location) => update((r) => ({ ...r, personal_information: { ...r.personal_information, location } }))}
+          onChange={(location) => update((r) => updatePersonalInformation(r, { location }))}
         />
         <TextField
           label="Website"
           value={info.website}
-          onChange={(website) => update((r) => ({ ...r, personal_information: { ...r.personal_information, website } }))}
+          onChange={(website) => update((r) => updatePersonalInformation(r, { website }))}
         />
       </div>
     </Section>
@@ -339,6 +347,15 @@ function emptyExperience(): Experience {
   };
 }
 
+function updateEducation(resume: Resume, index: number, patch: Partial<Education>): Resume {
+  return {
+    ...resume,
+    education: resume.education.map((education, i) =>
+      i === index ? { ...education, ...patch } : education,
+    ),
+  };
+}
+
 function EducationSection({ resume, update }: { resume: Resume; update: (fn: (prev: Resume) => Resume) => void }) {
   return (
     <Section title="Education">
@@ -349,65 +366,35 @@ function EducationSection({ resume, update }: { resume: Resume; update: (fn: (pr
               <TextField
                 label="School"
                 value={education.school}
-                onChange={(school) =>
-                  update((r) => ({
-                    ...r,
-                    education: r.education.map((e, i) => (i === index ? { ...e, school } : e)),
-                  }))
-                }
+                onChange={(school) => update((r) => updateEducation(r, index, { school }))}
               />
               <TextField
                 label="Degree"
                 value={education.degree}
-                onChange={(degree) =>
-                  update((r) => ({
-                    ...r,
-                    education: r.education.map((e, i) => (i === index ? { ...e, degree } : e)),
-                  }))
-                }
+                onChange={(degree) => update((r) => updateEducation(r, index, { degree }))}
               />
               <TextField
                 label="Field"
                 value={education.field}
-                onChange={(field) =>
-                  update((r) => ({
-                    ...r,
-                    education: r.education.map((e, i) => (i === index ? { ...e, field } : e)),
-                  }))
-                }
+                onChange={(field) => update((r) => updateEducation(r, index, { field }))}
               />
               <TextField
                 label="Location"
                 value={education.location}
-                onChange={(location) =>
-                  update((r) => ({
-                    ...r,
-                    education: r.education.map((e, i) => (i === index ? { ...e, location } : e)),
-                  }))
-                }
+                onChange={(location) => update((r) => updateEducation(r, index, { location }))}
               />
               <TextField
                 label="Start date"
                 placeholder="YYYY-MM"
                 value={education.start_date}
-                onChange={(start_date) =>
-                  update((r) => ({
-                    ...r,
-                    education: r.education.map((e, i) => (i === index ? { ...e, start_date } : e)),
-                  }))
-                }
+                onChange={(start_date) => update((r) => updateEducation(r, index, { start_date }))}
               />
               <TextField
                 label="End date (blank if current)"
                 placeholder="YYYY-MM"
                 value={education.end_date ?? ""}
                 onChange={(value) =>
-                  update((r) => ({
-                    ...r,
-                    education: r.education.map((e, i) =>
-                      i === index ? { ...e, end_date: value || null } : e,
-                    ),
-                  }))
+                  update((r) => updateEducation(r, index, { end_date: value || null }))
                 }
               />
             </div>

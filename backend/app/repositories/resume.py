@@ -1,6 +1,8 @@
 import uuid
 from typing import Protocol, runtime_checkable
 
+from sqlalchemy.orm import sessionmaker
+
 from app.db import SessionLocal
 from app.domain.resume import Resume
 from app.models import ResumeRow
@@ -49,7 +51,7 @@ class SqlAlchemyResumeRepository:
     """Persists the Master Resume to Postgres: canonical content as JSONB with
     the id/schema_version lifted onto the row."""
 
-    def __init__(self, session_factory) -> None:
+    def __init__(self, session_factory: sessionmaker) -> None:
         self._session_factory = session_factory
 
     @staticmethod
