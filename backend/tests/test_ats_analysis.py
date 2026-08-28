@@ -134,7 +134,7 @@ def test_required_coverage_is_computed_semantically_over_the_catalog() -> None:
     )
     analysis = _analysis()
 
-    result = _service(analysis, _match()).analyze("jd-1", None, report)
+    result = _service(analysis, _match()).analyze("jd-1", report)
 
     assert result.required_keyword_coverage == 1.0
 
@@ -145,7 +145,7 @@ def test_adjacent_skills_never_count_as_keyword_coverage() -> None:
     report = _report("Built with Django and Postgres.")
     analysis = _analysis()
 
-    result = _service(analysis, _match()).analyze("jd-1", None, report)
+    result = _service(analysis, _match()).analyze("jd-1", report)
 
     assert result.required_keyword_coverage == 0.5
 
@@ -154,14 +154,14 @@ def test_preferred_coverage_spans_all_preferred_terms() -> None:
     analysis = _analysis()
     report = _report("Redis is used for caching.")
 
-    result = _service(analysis, _match()).analyze("jd-1", None, report)
+    result = _service(analysis, _match()).analyze("jd-1", report)
 
     assert result.preferred_keyword_coverage == 1.0
 
 
 def test_evidence_coverage_counts_strong_and_partial_over_important() -> None:
     result = _service(_analysis(), _match()).analyze(
-        "jd-1", None, _report("anything")
+        "jd-1", _report("anything")
     )
 
     # 3 important requirements (2x REQUIRED, 1x SOFT_SKILL); PostgreSQL and
@@ -171,7 +171,7 @@ def test_evidence_coverage_counts_strong_and_partial_over_important() -> None:
 
 def test_unsupported_requirements_are_listed_explicitly() -> None:
     result = _service(_analysis(), _match()).analyze(
-        "jd-1", None, _report("")
+        "jd-1", _report("")
     )
 
     assert result.unsupported_requirements == ["Excellent communication skills"]
@@ -198,7 +198,7 @@ def test_no_supported_requirements_means_unknown_coverage_not_zero() -> None:
         matches=[],
     )
 
-    result = _service(analysis, match).analyze("jd-2", None, _report(""))
+    result = _service(analysis, match).analyze("jd-2", _report(""))
 
     assert result.required_keyword_coverage is None
     assert result.unsupported_requirements == ["Strong analytical thinking"]
@@ -206,7 +206,7 @@ def test_no_supported_requirements_means_unknown_coverage_not_zero() -> None:
 
 def test_analysis_reports_measured_checks_and_never_a_fake_score() -> None:
     result = _service(_analysis(), _match()).analyze(
-        "jd-1", None, _report("Ada Lovelace Redis")
+        "jd-1", _report("Ada Lovelace Redis")
     )
 
     assert result.pdf_text_extraction is True
@@ -224,7 +224,7 @@ def test_warnings_surface_unsupported_no_evidence_and_tables() -> None:
     report = _report("Ada Lovelace Redis").model_copy(
         update={"unexpected_tables": 2}
     )
-    result = _service(_analysis(), _match()).analyze("jd-1", None, report)
+    result = _service(_analysis(), _match()).analyze("jd-1", report)
 
     messages = "\n".join(result.warnings)
     assert "could not be measured against the Skill Catalog" in messages
@@ -238,7 +238,7 @@ def test_warnings_surface_ambiguous_matches() -> None:
     match.matches[1] = match.matches[1].model_copy(
         update={"status": MatchStatus.TRANSFERABLE, "ambiguous": True}
     )
-    result = _service(analysis, match).analyze("jd-1", None, _report(""))
+    result = _service(analysis, match).analyze("jd-1", _report(""))
 
     assert any("adjacent skills" in warning for warning in result.warnings)
 
@@ -249,7 +249,7 @@ def test_missing_analysis_returns_not_found() -> None:
         match_repository=InMemoryRepository(),
     )
     with pytest.raises(NotFoundError):
-        service.analyze("jd-missing", None, _report(""))
+        service.analyze("jd-missing", _report(""))
 
 
 def test_missing_match_result_returns_not_found() -> None:
@@ -260,4 +260,4 @@ def test_missing_match_result_returns_not_found() -> None:
         match_repository=InMemoryRepository(),
     )
     with pytest.raises(NotFoundError):
-        service.analyze("jd-1", None, _report(""))
+        service.analyze("jd-1", _report(""))

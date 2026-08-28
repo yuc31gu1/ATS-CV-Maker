@@ -9,10 +9,9 @@ report carries only measured checks; there is no pass/fail "ATS score".
 """
 
 from app import catalog
-from app.domain.analysis import Importance, JobAnalysis, RequirementCategory
+from app.domain.analysis import Importance, JobAnalysis, JobRequirement, RequirementCategory
 from app.domain.ats import ATSAnalysis
 from app.domain.matching import MatchResult, MatchStatus
-from app.domain.tailoring import TailoredResume
 from app.errors import NotFoundError
 from app.pdf.validator import PdfValidationReport
 from app.repositories.base import EntityRepository
@@ -35,7 +34,6 @@ class AtsAnalysisService:
     def analyze(
         self,
         job_description_id: str,
-        tailored: TailoredResume,
         report: PdfValidationReport,
     ) -> ATSAnalysis:
         analysis = self._analyses.get(job_description_id)
@@ -68,7 +66,7 @@ class AtsAnalysisService:
             if not catalog.skills_in_text(requirement.requirement)
         ]
         warnings = AtsAnalysisService._warnings(
-            analysis, match_result, unsupported, report
+            match_result, unsupported, report
         )
         return ATSAnalysis(
             required_keyword_coverage=AtsAnalysisService._coverage(
@@ -98,21 +96,26 @@ class AtsAnalysisService:
         )
 
     @staticmethod
-    def _supported(analysis: JobAnalysis, category: RequirementCategory):
+    def _supported(
+        analysis: JobAnalysis, category: RequirementCategory
+    ) -> list[JobRequirement]:
         return [
             requirement
             for requirement in analysis.requirements
-            if requirement.category is category
-            and (
-                requirement.importance in _HIGH_PRIORITY
-                if category is RequirementCategory.REQUIRED
-                else True
+            if (
+                requirement.category is category
+                and (
+                    category is not RequirementCategory.REQUIRED
+                    or requirement.importance in _HIGH_PRIORITY
+                )
+                and catalog.skills_in_text(requirement.requirement)
             )
-            and catalog.skills_in_text(requirement.requirement)
         ]
 
     @staticmethod
-    def _coverage(requirements, text: str) -> float | None:
+    def _coverage(
+        requirements: list[JobRequirement], text: str
+    ) -> float | None:
         if not requirements:
             return None
         pdf_skills = set(catalog.skills_in_text(text))
@@ -124,7 +127,10 @@ class AtsAnalysisService:
         return covered / len(requirements)
 
     @staticmethod
-    def _evidence_coverage(analysis: JobAnalysis, status_by_requirement: dict) -> float | None:
+    def _evidence_coverage(
+        analysis: JobAnalysis,
+        status_by_requirement: dict[str, MatchStatus],
+    ) -> float | None:
         important = [
             requirement
             for requirement in analysis.requirements
@@ -142,7 +148,6 @@ class AtsAnalysisService:
 
     @staticmethod
     def _warnings(
-        analysis: JobAnalysis,
         match_result: MatchResult,
         unsupported: list[str],
         report: PdfValidationReport,

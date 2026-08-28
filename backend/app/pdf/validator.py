@@ -48,10 +48,6 @@ def _normalize(text: str) -> str:
     return _WS_RE.sub(" ", text).strip()
 
 
-def _contains(haystack: str, needle: str) -> bool:
-    return needle in haystack
-
-
 class PdfValidator:
     """Extracts a compiled PDF and validates it against the Tailored Resume it renders."""
 
@@ -115,9 +111,7 @@ class PdfValidator:
     def _check_name_and_contact(text: str, tailored: TailoredResume) -> None:
         normalized = _normalize(text)
         info = tailored.personal_information
-        if info.full_name and not _contains(
-            normalized, _normalize(info.full_name)
-        ):
+        if info.full_name and _normalize(info.full_name) not in normalized:
             raise PdfValidationFailed(
                 "candidate name missing from extracted PDF text",
                 details={"expected": info.full_name},
@@ -126,7 +120,7 @@ class PdfValidator:
             item for item in (info.email, info.phone, info.location, info.website) if item
         ]
         if contact_items and not any(
-            _contains(normalized, _normalize(item)) for item in contact_items
+            _normalize(item) in normalized for item in contact_items
         ):
             raise PdfValidationFailed(
                 "no contact information found in extracted PDF text",
@@ -186,7 +180,7 @@ class PdfValidator:
         ]
         for candidate in candidates:
             needle = _normalize(candidate)
-            if not any(_contains(haystack, needle) for haystack in haystacks):
+            if not any(needle in haystack for haystack in haystacks):
                 raise PdfValidationFailed(
                     "PDF text does not preserve the tailored content",
                     details={"content": candidate},

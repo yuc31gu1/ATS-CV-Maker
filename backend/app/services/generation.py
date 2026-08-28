@@ -60,7 +60,7 @@ class GenerationService:
         tex = self._renderer.render(tailored)
         pdf_bytes = self._compile(tex)
         report = self._validator.validate(pdf_bytes, tailored)
-        analysis = self._ats.analyze(job_description_id, tailored, report)
+        analysis = self._ats.analyze(job_description_id, report)
         latex_key = f"latex/{job_description_id}.tex"
         pdf_key = f"pdf/{job_description_id}.pdf"
         self._storage.save(latex_key, tex.encode("utf-8"))

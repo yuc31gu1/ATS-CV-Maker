@@ -5,10 +5,12 @@ class ATSAnalysis(BaseModel):
     """Measured ATS Compatibility Analysis for one generated PDF.
 
     Reports measured checks only — never a pass/fail "ATS score" (user story
-    26). Required/preferred keyword coverage and evidence coverage are
-    computed over high-priority requirements; requirements the Skill Catalog
-    cannot measure are listed explicitly in ``unsupported_requirements``. The
-    page count is reported honestly, never auto-fitted (user story 33).
+    26). Required keyword coverage is computed over high-priority required
+    requirements, preferred coverage over all preferred requirements, and
+    evidence coverage over high-priority requirements; requirements the Skill
+    Catalog cannot measure are listed explicitly in
+    ``unsupported_requirements``. The page count is reported honestly, never
+    auto-fitted (user story 33).
     """
 
     required_keyword_coverage: float | None = None

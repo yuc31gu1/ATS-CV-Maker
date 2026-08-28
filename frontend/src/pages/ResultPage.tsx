@@ -145,13 +145,13 @@ export function ResultPage() {
     }
     setPhase({ name: "generating" });
     try {
+      let generated: GeneratedResume;
       try {
-        await fetchGenerated(jobDescriptionId);
+        generated = await fetchGenerated(jobDescriptionId);
       } catch {
-        await generateDocument(jobDescriptionId);
+        generated = await generateDocument(jobDescriptionId);
       }
-      const [generated, pdfUrl, latexUrl] = await Promise.all([
-        fetchGenerated(jobDescriptionId),
+      const [pdfUrl, latexUrl] = await Promise.all([
         generatedPdfUrl(jobDescriptionId),
         generatedLatexUrl(jobDescriptionId),
       ]);

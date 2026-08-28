@@ -54,7 +54,7 @@ class FakeAtsService:
     """Computes a minimal measured ATS analysis without any repositories."""
 
     def analyze(
-        self, job_description_id: str, tailored: TailoredResume, report: PdfValidationReport
+        self, job_description_id: str, report: PdfValidationReport
     ) -> ATSAnalysis:
         return ATSAnalysis(
             pdf_text_extraction=True,

@@ -9,6 +9,7 @@ maps to a structured PDF_VALIDATION_FAILED.
 import re
 import subprocess
 import tempfile
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -59,7 +60,7 @@ class PdfTools:
         return len([line for line in output.splitlines() if _IMAGE_ROW_RE.match(line)])
 
     @contextmanager
-    def _temp_pdf(self, pdf_bytes: bytes):
+    def _temp_pdf(self, pdf_bytes: bytes) -> Iterator[Path]:
         with tempfile.TemporaryDirectory(prefix="ats-pdf-") as work_dir:
             pdf_path = Path(work_dir) / "input.pdf"
             pdf_path.write_bytes(pdf_bytes)
