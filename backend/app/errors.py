@@ -24,6 +24,11 @@ class ResourceValidationError(AppError):
     status_code = 422
 
 
+class InvalidResumeError(AppError):
+    code = "INVALID_RESUME"
+    status_code = 422
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:

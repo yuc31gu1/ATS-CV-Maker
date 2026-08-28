@@ -2,11 +2,12 @@ import shutil
 from pathlib import Path
 
 import pytest
-from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, text
 from testcontainers.postgres import PostgresContainer
 
+from alembic import command
+from app.domain.resume import Experience, PersonalInformation, Resume
 from app.main import app
 from app.services.health import HealthService, get_health_service
 
@@ -29,7 +30,7 @@ def _psycopg_url(postgres: PostgresContainer) -> str:
 
 
 @pytest.mark.skipif(shutil.which("docker") is None, reason="Docker unavailable")
-def test_initial_migration_applies_to_postgres() -> None:
+def test_migrations_apply_to_postgres() -> None:
     with PostgresContainer("postgres:16-alpine") as postgres:
         url = _psycopg_url(postgres)
         command.upgrade(_alembic_config(url), "head")
@@ -37,7 +38,46 @@ def test_initial_migration_applies_to_postgres() -> None:
         engine = create_engine(url)
         with engine.connect() as conn:
             version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-        assert version == "0001"
+            tables = conn.execute(
+                text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
+            ).scalars()
+        assert version == "0002"
+        assert "resumes" in set(tables)
+
+
+@pytest.mark.skipif(shutil.which("docker") is None, reason="Docker unavailable")
+def test_sqlalchemy_resume_repository_roundtrip() -> None:
+    from sqlalchemy.orm import sessionmaker
+
+    from app.repositories.resume import SqlAlchemyResumeRepository
+
+    with PostgresContainer("postgres:16-alpine") as postgres:
+        url = _psycopg_url(postgres)
+        command.upgrade(_alembic_config(url), "head")
+
+        repo = SqlAlchemyResumeRepository(sessionmaker(bind=create_engine(url)))
+        created = repo.create(_resume())
+        fetched = repo.get(created.id)
+        assert fetched == created
+        assert fetched.personal_information.full_name == "Ada Lovelace"
+
+        listed = repo.list()
+        assert [r.id for r in listed] == [created.id]
+
+        updated = repo.update(
+            created.id,
+            Resume.model_validate({**created.model_dump(exclude={"id"}), "summary": "Updated"}),
+        )
+        assert updated.summary == "Updated"
+        assert repo.get(created.id).summary == "Updated"
+
+
+def _resume() -> Resume:
+    return Resume(
+        personal_information=PersonalInformation(full_name="Ada Lovelace"),
+        summary="Deterministic document pipelines.",
+        experience=[Experience(company="Analytical Engines Ltd", title="Engineer", start_date="2021-03")],
+    )
 
 
 @pytest.mark.skipif(shutil.which("docker") is None, reason="Docker unavailable")
