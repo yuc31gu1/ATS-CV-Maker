@@ -320,6 +320,54 @@ class TestClaimVerification:
         assert result.passed is True
         assert result.reasons == []
 
+    def test_passes_traceable_project_bullet(self):
+        snapshot = resume(
+            projects=[
+                Project(
+                    name="Ordering service",
+                    technologies=["FastAPI"],
+                    bullets=["Built the service with FastAPI"],
+                )
+            ]
+        )
+        change = TailoredChange(
+            key="project:0:bullet:0",
+            kind=TailorChangeKind.BULLET,
+            section="project",
+            original="Built the service with FastAPI",
+            tailored="Built the service with FastAPI",
+            source_evidence_ids=["project:0:bullet:0"],
+        )
+
+        result = ClaimVerification().verify(change=change, snapshot=snapshot)
+
+        assert result.passed is True
+        assert result.reasons == []
+
+    def test_rejects_project_bullet_with_hallucinated_technology(self):
+        snapshot = resume(
+            projects=[
+                Project(
+                    name="Ordering service",
+                    technologies=["FastAPI"],
+                    bullets=["Built the service with FastAPI"],
+                )
+            ]
+        )
+        change = TailoredChange(
+            key="project:0:bullet:0",
+            kind=TailorChangeKind.BULLET,
+            section="project",
+            original="Built the service with FastAPI",
+            tailored="Built the service with FastAPI and Redis",
+            source_evidence_ids=["project:0:bullet:0"],
+        )
+
+        result = ClaimVerification().verify(change=change, snapshot=snapshot)
+
+        assert result.passed is False
+        assert any("redis" in reason for reason in result.reasons)
+
     def test_rejects_bullet_without_source_evidence_ids(self):
         snapshot = resume()
         change = TailoredChange(

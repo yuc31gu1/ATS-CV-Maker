@@ -42,6 +42,9 @@ class ClaimVerification:
         if change.kind is TailorChangeKind.SUMMARY:
             return self._snapshot_text(snapshot)
         ids = evidence_ids(snapshot)
+        for proj_index, proj in enumerate(snapshot.projects):
+            for bullet_index, bullet in enumerate(proj.bullets):
+                ids[f"project:{proj_index}:bullet:{bullet_index}"] = bullet
         return "\n".join(ids[eid] for eid in change.source_evidence_ids if eid in ids)
 
     @staticmethod
