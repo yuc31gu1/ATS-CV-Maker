@@ -29,9 +29,9 @@ from app.errors import (
     TailoringFailed,
 )
 from app.llm.base import (
-    LLMProvider,
     TAILOR_SCOPE_END_MARKER,
     TAILOR_SCOPE_START_MARKER,
+    LLMProvider,
 )
 from app.repositories.base import EntityRepository
 from app.repositories.resume import ResumeRepository

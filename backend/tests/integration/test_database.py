@@ -258,7 +258,6 @@ def test_match_endpoint_end_to_end_on_postgres() -> None:
         get_job_service,
         get_matching_service,
     )
-    from app.domain.resume import Experience, PersonalInformation, Resume
     from app.llm.fixture import FixtureLLMProvider
     from app.models import Job, JobAnalysis, JobDescription, MatchResultRow
     from app.repositories import mappers

@@ -8,7 +8,6 @@ from app.dependencies import (
     get_tailoring_service,
 )
 from app.domain.jobs import JOB_TYPE_TAILOR
-from app.domain.tailoring import ChangeAction
 from app.llm.fixture import FixtureLLMProvider
 from app.main import app
 from app.repositories.in_memory import InMemoryRepository
@@ -129,7 +128,7 @@ def submit_and_complete_tailor(client: TestClient, jd_id: str, resume_id: str) -
 
 def test_tailor_job_end_to_end_pins_version_and_persists(api_client, services):
     seeded = seed_matched_job(api_client)
-    submitted = submit_and_complete_tailor(
+    submit_and_complete_tailor(
         api_client, seeded["job_description_id"], seeded["resume_id"]
     )
 
