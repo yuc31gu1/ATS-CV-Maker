@@ -21,7 +21,7 @@ def upgrade() -> None:
     op.create_table(
         "resume_versions",
         sa.Column("id", sa.String(length=36), primary_key=True),
-        sa.Column("resume_id", sa.String(length=36), nullable=False, index=True),
+        sa.Column("resume_id", sa.String(length=36), nullable=False),
         sa.Column("data", JSONB(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     )
