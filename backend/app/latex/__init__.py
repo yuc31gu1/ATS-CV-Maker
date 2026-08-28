@@ -1,0 +1,1 @@
+"""Deterministic LaTeX document generation (ADR-0001)."""

@@ -39,6 +39,16 @@ class TailoringFailed(AppError):
     status_code = 502
 
 
+class LatexCompilationFailed(AppError):
+    code = "LATEX_COMPILATION_FAILED"
+    status_code = 502
+
+
+class StorageFileNotFound(AppError):
+    code = "FILE_NOT_FOUND"
+    status_code = 404
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
