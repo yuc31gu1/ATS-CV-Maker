@@ -6,8 +6,8 @@ from pydantic import BaseModel, ValidationError
 
 from app import catalog
 from app.domain.analysis import Importance, JobAnalysis
-from app.domain.matching import MatchResult, MatchStatus
-from app.domain.resume import Resume
+from app.domain.matching import EvidenceMatch, MatchResult, MatchStatus
+from app.domain.resume import Experience, Project, Resume
 from app.domain.tailoring import (
     ChangeAction,
     ChangeStatus,
@@ -76,7 +76,7 @@ class TailoringEngine:
     def _select_bullets(
         self,
         resume: Resume,
-        matches: list,
+        matches: list[EvidenceMatch],
         matched_skills: set[str],
     ) -> list[SelectedBullet]:
         selected: list[SelectedBullet] = []
@@ -114,16 +114,16 @@ class TailoringEngine:
     @staticmethod
     def _matched_for_text(
         text: str,
-        matches: list,
+        matches: list[EvidenceMatch],
         matched_skills: set[str],
-    ) -> list:
+    ) -> list[EvidenceMatch]:
         hit_skills = set(catalog.skills_in_text(text)) & matched_skills
         if not hit_skills:
             return []
         return [m for m in matches if m.matched_skill in hit_skills]
 
     @staticmethod
-    def _score(matched: list) -> int:
+    def _score(matched: list[EvidenceMatch]) -> int:
         return max(
             _IMPORTANCE_RANK[m.importance] * 10 + _STATUS_RANK[m.status]
             for m in matched
@@ -132,7 +132,7 @@ class TailoringEngine:
     def _select_projects(
         self,
         resume: Resume,
-        matches: list,
+        matches: list[EvidenceMatch],
         matched_skills: set[str],
     ) -> list[SelectedProject]:
         selected: list[SelectedProject] = []
@@ -239,13 +239,14 @@ class TailoringService:
         resume = self._resumes.get(resume_id)
         if resume is None:
             raise NotFoundError("resume not found", details={"id": resume_id})
-        if self._matches.get(job_description_id) is None:
+        match_result = self._matches.get(job_description_id)
+        if match_result is None:
             raise NotFoundError(
                 "match result not found",
                 details={"job_description_id": job_description_id},
             )
         version = self._capture_snapshot(resume)
-        scope = self._engine.scope(self._matches.get(job_description_id), version.data)
+        scope = self._engine.scope(match_result, version.data)
         output = self._rewrite(scope, job_description_id)
         return self._build_tailored(
             job_description_id, resume_id, version, scope, output
@@ -350,31 +351,19 @@ class TailoringService:
         snapshot: Resume,
         scope: TailoringScope,
         output: LLMTailoredOutput,
-    ) -> tuple[list[TailoredChange], str, list, list]:
+    ) -> tuple[list[TailoredChange], str, list[Experience], list[Project]]:
         scope_by_id = {b.evidence_id: b for b in scope.bullets}
         llm_by_id = {b.evidence_id: b for b in output.bullets if b.evidence_id in scope_by_id}
         changes: list[TailoredChange] = []
 
         if scope.summary:
-            tailored_summary = output.summary if output.summary is not None else scope.summary
-            changes.append(
-                TailoredChange(
-                    key="summary",
-                    kind=TailorChangeKind.SUMMARY,
-                    section="summary",
-                    original=scope.summary,
-                    tailored=tailored_summary,
-                    reason=output.summary_reason or "Rewritten for the target role.",
-                    source_evidence_ids=(
-                        output.summary_source_evidence_ids
-                        or [b.evidence_id for b in scope.bullets]
-                    ),
-                )
-            )
+            summary_change = self._summary_change(scope, output)
+            changes.append(summary_change)
+            tailored_summary = summary_change.tailored
         else:
             tailored_summary = snapshot.summary
 
-        experience = []
+        experience: list[Experience] = []
         for exp_index, exp in enumerate(snapshot.experience):
             new_bullets = []
             for bullet_index, original in enumerate(exp.bullets):
@@ -382,20 +371,16 @@ class TailoringService:
                 if evidence_id not in scope_by_id:
                     continue
                 rewritten = llm_by_id.get(evidence_id)
-                new_bullets.append(
-                    self._bullet_change(
-                        changes,
-                        evidence_id,
-                        "experience",
-                        original,
-                        rewritten,
-                    )
+                change = self._bullet_change(
+                    evidence_id, "experience", original, rewritten
                 )
+                changes.append(change)
+                new_bullets.append(change.tailored)
             if new_bullets:
                 experience.append(exp.model_copy(update={"bullets": new_bullets}))
 
         selected_indices = {p.index for p in scope.projects}
-        projects = []
+        projects: list[Project] = []
         for index, proj in enumerate(snapshot.projects):
             if index not in selected_indices:
                 continue
@@ -406,27 +391,38 @@ class TailoringService:
                     new_bullets.append(original)
                     continue
                 rewritten = llm_by_id.get(evidence_id)
-                new_bullets.append(
-                    self._bullet_change(
-                        changes,
-                        evidence_id,
-                        "project",
-                        original,
-                        rewritten,
-                    )
+                change = self._bullet_change(
+                    evidence_id, "project", original, rewritten
                 )
+                changes.append(change)
+                new_bullets.append(change.tailored)
             projects.append(proj.model_copy(update={"bullets": new_bullets}))
 
         return changes, tailored_summary, experience, projects
 
+    def _summary_change(
+        self, scope: TailoringScope, output: LLMTailoredOutput
+    ) -> TailoredChange:
+        return TailoredChange(
+            key="summary",
+            kind=TailorChangeKind.SUMMARY,
+            section="summary",
+            original=scope.summary,
+            tailored=output.summary if output.summary is not None else scope.summary,
+            reason=output.summary_reason or "Rewritten for the target role.",
+            source_evidence_ids=(
+                output.summary_source_evidence_ids
+                or [b.evidence_id for b in scope.bullets]
+            ),
+        )
+
     @staticmethod
     def _bullet_change(
-        changes: list[TailoredChange],
         evidence_id: str,
         section: str,
         original: str,
         rewritten: RewrittenBullet | None,
-    ) -> str:
+    ) -> TailoredChange:
         if rewritten is not None:
             tailored = rewritten.text
             reason = rewritten.reason
@@ -435,18 +431,15 @@ class TailoringService:
             tailored = original
             reason = "No rewrite produced; kept as engine-selected evidence."
             source_ids = [evidence_id]
-        changes.append(
-            TailoredChange(
-                key=evidence_id,
-                kind=TailorChangeKind.BULLET,
-                section=section,
-                original=original,
-                tailored=tailored,
-                reason=reason,
-                source_evidence_ids=source_ids,
-            )
+        return TailoredChange(
+            key=evidence_id,
+            kind=TailorChangeKind.BULLET,
+            section=section,
+            original=original,
+            tailored=tailored,
+            reason=reason,
+            source_evidence_ids=source_ids,
         )
-        return tailored
 
     def _verify(self, changes: list[TailoredChange], snapshot: Resume) -> None:
         reasons = [
@@ -535,35 +528,8 @@ class TailoringService:
 
         scope = self._scope_for_change(job_description_id, version.data, change_key)
         output = self._rewrite(scope, job_description_id)
+        regenerated = self._resolve_regenerated(target, scope, output)
 
-        if change_key == "summary":
-            new_text = output.summary if output.summary is not None else scope.summary
-            new_reason = output.summary_reason or "Rewritten for the target role."
-            new_source_ids = output.summary_source_evidence_ids or [
-                b.evidence_id for b in scope.bullets
-            ]
-        else:
-            rewritten = next(
-                (b for b in output.bullets if b.evidence_id == change_key), None
-            )
-            if rewritten is None:
-                new_text = target.original
-                new_reason = "No rewrite produced; kept as engine-selected evidence."
-                new_source_ids = [change_key]
-            else:
-                new_text = rewritten.text
-                new_reason = rewritten.reason
-                new_source_ids = rewritten.source_evidence_ids or [change_key]
-
-        regenerated = TailoredChange(
-            key=target.key,
-            kind=target.kind,
-            section=target.section,
-            original=target.original,
-            tailored=new_text,
-            reason=new_reason,
-            source_evidence_ids=new_source_ids,
-        )
         result = self._verification.verify(change=regenerated, snapshot=version.data)
         if not result.passed:
             raise TailoringFailed(
@@ -575,8 +541,18 @@ class TailoringService:
             if change.key == change_key:
                 tailored.changes[index] = regenerated
                 break
-        self._set_content(tailored, change_key, new_text)
+        self._set_content(tailored, change_key, regenerated.tailored)
         return self._tailored.add(job_description_id, tailored)
+
+    def _resolve_regenerated(
+        self, target: TailoredChange, scope: TailoringScope, output: LLMTailoredOutput
+    ) -> TailoredChange:
+        if target.kind is TailorChangeKind.SUMMARY:
+            return self._summary_change(scope, output)
+        rewritten = next(
+            (b for b in output.bullets if b.evidence_id == target.key), None
+        )
+        return self._bullet_change(target.key, target.section, target.original, rewritten)
 
     def _scope_for_change(
         self, job_description_id: str, snapshot: Resume, change_key: str
