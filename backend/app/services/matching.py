@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from datetime import UTC, datetime
 
 from app import catalog
 from app.domain.analysis import JobAnalysis, JobRequirement
@@ -7,6 +6,7 @@ from app.domain.matching import EvidenceMatch, MatchResult, MatchStatus
 from app.domain.resume import Resume
 from app.errors import NotFoundError
 from app.repositories.base import EntityRepository
+from app.time import utcnow
 
 _STATUS_RANK = {
     MatchStatus.NO_EVIDENCE: 0,
@@ -24,10 +24,6 @@ class _Candidate:
     found_skill: str
     matched_skill: str
     evidence: list[tuple[str, str]]
-
-
-def utcnow() -> datetime:
-    return datetime.now(UTC)
 
 
 class MatchingService:
@@ -63,8 +59,6 @@ class MatchingService:
                 details={"job_description_id": job_description_id},
             )
         result = self.match(analysis, resume)
-        result.job_description_id = job_description_id
-        result.resume_id = resume.id or ""
         existing = self._matches.get(job_description_id)
         result.created_at = existing.created_at if existing is not None else utcnow()
         return self._matches.add(job_description_id, result)
@@ -145,9 +139,7 @@ class MatchingService:
             self._candidate_for(skill, canonical_skills, substantiated) for skill in found
         ]
         best = max(candidates, key=lambda candidate: _STATUS_RANK[candidate.status])
-        ambiguous = best.status is MatchStatus.TRANSFERABLE or len(
-            {candidate.found_skill for candidate in candidates if _STATUS_RANK[candidate.status] > 0}
-        ) > 1
+        ambiguous = self._is_ambiguous(best, candidates)
         return EvidenceMatch(
             requirement=requirement.requirement,
             category=requirement.category,
@@ -159,6 +151,16 @@ class MatchingService:
             evidence_ids=[item[0] for item in best.evidence],
             evidence=list(dict.fromkeys(item[1] for item in best.evidence)),
         )
+
+    @staticmethod
+    def _is_ambiguous(best: _Candidate, candidates: list[_Candidate]) -> bool:
+        """Flag transferable hits and requirements naming several distinct skills."""
+        distinct_hits = {
+            candidate.found_skill
+            for candidate in candidates
+            if _STATUS_RANK[candidate.status] > 0
+        }
+        return best.status is MatchStatus.TRANSFERABLE or len(distinct_hits) > 1
 
     @staticmethod
     def _candidate_for(

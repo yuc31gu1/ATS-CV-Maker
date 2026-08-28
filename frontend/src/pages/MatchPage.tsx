@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { fetchMatch, type EvidenceMatch, type MatchResult, type MatchStatus } from "../api/match";
-import { listResumes, type Resume } from "../api/resume";
+import { listResumes } from "../api/resume";
 
 type Phase =
   | { name: "form" }
@@ -67,7 +67,7 @@ export function MatchPage() {
         });
         return;
       }
-      const resume: Resume = resumes[0];
+      const resume = resumes[0];
       const result = await fetchMatch(jobDescriptionId, resume.id);
       setPhase({ name: "done", result });
     } catch (err) {

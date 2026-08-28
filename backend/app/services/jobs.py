@@ -1,4 +1,3 @@
-from datetime import UTC, datetime
 from uuid import uuid4
 
 from app.domain.jobs import (
@@ -10,10 +9,7 @@ from app.domain.jobs import (
 )
 from app.errors import AppError, NotFoundError
 from app.repositories.base import EntityRepository
-
-
-def utcnow() -> datetime:
-    return datetime.now(UTC)
+from app.time import utcnow
 
 
 class JobService:

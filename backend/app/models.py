@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
@@ -8,10 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
 from app.domain.resume import CURRENT_SCHEMA_VERSION
-
-
-def utcnow() -> datetime:
-    return datetime.now(UTC)
+from app.time import utcnow
 
 
 class ResumeRow(Base):

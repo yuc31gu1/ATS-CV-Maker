@@ -74,10 +74,11 @@ SKILLS: tuple[Skill, ...] = (
     Skill("next.js", aliases=("next", "nextjs")),
 )
 
-_CANONICAL_BY_NAME: dict[str, str] = {}
-for _skill in SKILLS:
-    for _name in (_skill.canonical, *_skill.aliases):
-        _CANONICAL_BY_NAME[normalize(_name)] = _skill.canonical
+_CANONICAL_BY_NAME: dict[str, str] = {
+    normalize(name): skill.canonical
+    for skill in SKILLS
+    for name in (skill.canonical, *skill.aliases)
+}
 
 _RELATED_BY_CANONICAL: dict[str, frozenset[str]] = {
     _skill.canonical: frozenset(_skill.related) for _skill in SKILLS
