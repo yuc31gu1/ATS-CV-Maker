@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from app.domain.analysis import Importance, JobRequirement, RequirementCategory
 from app.domain.matching import MatchStatus
+from app.domain.tailoring import ReviewDecision
 
 
 class DatabaseStatus(str, Enum):
@@ -88,3 +89,22 @@ class MatchOut(BaseModel):
     resume_id: str
     matches: list[EvidenceMatchOut] = Field(default_factory=list)
     created_at: datetime
+
+
+class TailorIn(BaseModel):
+    job_description_id: str
+
+
+class TailorSubmitResponse(BaseModel):
+    job_id: str
+    job_description_id: str
+    resume_id: str
+    status: str
+
+
+class RegenerateIn(BaseModel):
+    change_key: str
+
+
+class ReviewDecisionsIn(BaseModel):
+    decisions: list[ReviewDecision] = Field(default_factory=list)

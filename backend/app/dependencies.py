@@ -12,6 +12,7 @@ from app.repositories.sqlalchemy import SqlAlchemyRepository
 from app.services.analysis import AnalysisService
 from app.services.jobs import JobService
 from app.services.matching import MatchingService
+from app.services.tailoring import TailoringService
 
 _LLM_PROVIDER = FixtureLLMProvider()
 
@@ -68,4 +69,40 @@ def get_matching_service(db: Annotated[Session, Depends(get_db)]) -> MatchingSer
         match_repository=SqlAlchemyRepository(
             db, MatchResultRow, mappers.match_result_to_row, mappers.match_result_from_row
         ),
+    )
+
+
+def get_tailoring_service(
+    db: Annotated[Session, Depends(get_db)],
+    llm_provider: Annotated[FixtureLLMProvider, Depends(get_llm_provider)],
+) -> TailoringService:
+    from app.models import (
+        JobAnalysis,
+        MatchResultRow,
+        ResumeVersionRow,
+        TailoredResumeRow,
+    )
+    from app.repositories.resume import SqlAlchemyResumeRepository
+
+    return TailoringService(
+        version_repository=SqlAlchemyRepository(
+            db,
+            ResumeVersionRow,
+            mappers.resume_version_to_row,
+            mappers.resume_version_from_row,
+        ),
+        tailored_repository=SqlAlchemyRepository(
+            db,
+            TailoredResumeRow,
+            mappers.tailored_resume_to_row,
+            mappers.tailored_resume_from_row,
+        ),
+        resume_repository=SqlAlchemyResumeRepository(SessionLocal),
+        analysis_repository=SqlAlchemyRepository(
+            db, JobAnalysis, mappers.job_analysis_to_row, mappers.job_analysis_from_row
+        ),
+        match_repository=SqlAlchemyRepository(
+            db, MatchResultRow, mappers.match_result_to_row, mappers.match_result_from_row
+        ),
+        llm_provider=llm_provider,
     )

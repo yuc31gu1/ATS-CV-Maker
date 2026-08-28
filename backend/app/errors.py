@@ -34,6 +34,11 @@ class LLMValidationFailed(AppError):
     status_code = 502
 
 
+class TailoringFailed(AppError):
+    code = "TAILORING_FAILED"
+    status_code = 502
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:

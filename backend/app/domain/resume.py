@@ -129,6 +129,8 @@ def evidence_ids(resume: Resume) -> dict[str, str]:
             ids[f"experience:{index}:bullet:{bullet_index}"] = bullet
     for index, proj in enumerate(resume.projects):
         ids[f"project:{index}"] = proj.name
+        for bullet_index, bullet in enumerate(proj.bullets):
+            ids[f"project:{index}:bullet:{bullet_index}"] = bullet
     for index, edu in enumerate(resume.education):
         ids[f"education:{index}"] = f"{edu.degree} at {edu.school}"
     for index, cert in enumerate(resume.certifications):

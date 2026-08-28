@@ -81,3 +81,33 @@ class MatchResultRow(Base):
     resume_id: Mapped[str] = mapped_column(String(36), nullable=False)
     matches: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ResumeVersionRow(Base):
+    """Immutable snapshot of the Master Resume (ADR-0004).
+
+    Captured when a tailoring job starts; Tailored Resume and Generated
+    Resume rows pin to it so artifacts never depend on the live master.
+    """
+
+    __tablename__ = "resume_versions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    resume_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class TailoredResumeRow(Base):
+    """Persisted Tailored Resume, keyed by job description (stepper session root)."""
+
+    __tablename__ = "tailored_resumes"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    job_description_id: Mapped[str] = mapped_column(
+        ForeignKey("job_descriptions.id"), unique=True, index=True
+    )
+    resume_version_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    resume_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

@@ -95,6 +95,18 @@ def related_to(canonical: str) -> frozenset[str]:
     return _RELATED_BY_CANONICAL.get(canonical, frozenset())
 
 
+def synonyms_of(canonical: str) -> tuple[str, ...]:
+    """All surface names (canonical + aliases) for a canonical skill.
+
+    Used by deterministic rewrites to align wording with the Job Description's
+    terminology while keeping every claim traceable to the same canonical.
+    """
+    for skill in SKILLS:
+        if skill.canonical == canonical:
+            return (skill.canonical, *skill.aliases)
+    return ()
+
+
 def is_related(a: str, b: str) -> bool:
     """True when two skills are adjacent-but-distinct (never synonyms)."""
     canonical_a = canonical_of(a)
