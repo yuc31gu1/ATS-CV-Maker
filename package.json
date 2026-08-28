@@ -1,0 +1,8 @@
+{
+  "name": "ats-cv-maker",
+  "private": true,
+  "scripts": {
+    "typecheck": "npm --prefix frontend run typecheck",
+    "test": "npm --prefix frontend test && cd backend && .venv/bin/python -m pytest"
+  }
+}

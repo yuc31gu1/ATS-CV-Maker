@@ -1,0 +1,13 @@
+from pathlib import Path
+from typing import Protocol, runtime_checkable
+
+
+@runtime_checkable
+class StorageService(Protocol):
+    def save(self, key: str, data: bytes) -> Path: ...
+
+    def load(self, key: str) -> bytes: ...
+
+    def delete(self, key: str) -> None: ...
+
+    def exists(self, key: str) -> bool: ...

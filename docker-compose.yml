@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ats}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ats}
+      POSTGRES_DB: ${POSTGRES_DB:-ats}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ats} -d ${POSTGRES_DB:-ats}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    environment:
+      ATS_APP_NAME: ats-cv-backend
+      ATS_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-ats}:${POSTGRES_PASSWORD:-ats}@postgres:5432/${POSTGRES_DB:-ats}
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - storage_data:/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  storage_data:
