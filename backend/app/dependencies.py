@@ -10,6 +10,7 @@ from app.llm.fixture import FixtureLLMProvider
 from app.repositories.sqlalchemy import SqlAlchemyRepository
 from app.services.analysis import AnalysisService
 from app.services.jobs import JobService
+from app.services.matching import MatchingService
 
 _LLM_PROVIDER = FixtureLLMProvider()
 
@@ -44,4 +45,13 @@ def get_analysis_service(
         jd_repository=SqlAlchemyRepository(db, JobDescription),
         analysis_repository=SqlAlchemyRepository(db, JobAnalysis),
         llm_provider=llm_provider,
+    )
+
+
+def get_matching_service(db: Annotated[Session, Depends(get_db)]) -> MatchingService:
+    from app.models import JobAnalysis, MatchResultRow
+
+    return MatchingService(
+        analysis_repository=SqlAlchemyRepository(db, JobAnalysis),
+        match_repository=SqlAlchemyRepository(db, MatchResultRow),
     )

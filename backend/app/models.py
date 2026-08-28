@@ -66,3 +66,21 @@ class Job(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
+
+
+class MatchResultRow(Base):
+    """Persisted requirement–evidence match result, keyed by job description.
+
+    MATCH runs synchronously (ADR-0003); the row lets the stepper re-fetch the
+    result on back-navigation without recomputing or re-running anything.
+    """
+
+    __tablename__ = "job_match_results"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    job_description_id: Mapped[str] = mapped_column(
+        ForeignKey("job_descriptions.id"), unique=True, index=True
+    )
+    resume_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    matches: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
