@@ -1,7 +1,7 @@
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from app.domain.resume import MonthYear, Resume, evidence_ids
+from app.domain.resume import MonthYear, PersonalInformation, Resume, evidence_ids
 
 month_year_adapter = TypeAdapter(MonthYear)
 
@@ -120,6 +120,22 @@ def test_resume_rejects_missing_required_section_fields() -> None:
     payload["personal_information"]["email"] = "not-an-email"
     with pytest.raises(ValidationError):
         Resume.model_validate(payload)
+
+
+def test_empty_email_survives_serialization_roundtrip() -> None:
+    """An unset (empty) email must roundtrip through JSONB persistence.
+
+    Regression: email defaulted to "" but its pattern rejected "" on
+    re-validation, so any resume without an email could not be read back from
+    the database.
+    """
+    resume = Resume(personal_information=PersonalInformation(full_name="Ada Lovelace"))
+
+    restored = Resume.model_validate(
+        {**resume.model_dump(mode="json"), "id": resume.id}
+    )
+
+    assert restored == resume
 
 
 def test_evidence_ids_are_deterministic_and_indexed() -> None:
